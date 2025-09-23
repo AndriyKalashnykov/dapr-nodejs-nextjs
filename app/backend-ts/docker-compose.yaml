@@ -1,0 +1,84 @@
+name: demo-ts
+
+services:
+  ############################
+  # backend app + Dapr sidecar
+  ############################
+  backend-ts:
+    labels:
+      - 'sos.service-type=microservice'
+    build:
+      dockerfile: ./Dockerfile.dev
+    ports:
+      - '3500:3500'
+    command: npm run dev -w app/backend-ts
+    environment:
+      SERVICE_NAME: backend-ts
+      NODE_ENV: development
+      JWT_SECRET_KEY: secret
+      SECRETS_KEY: serviceSecrets
+      SECRETS_STORE_NAME: local-secretstore
+      # SEED_DATA: true # Load seed data on start
+      CHOKIDAR_USEPOLLING: true # Supports "tsx watch" for live reloading
+      DAPR_HOST: 0.0.0.0
+      DAPR_PORT: 3500
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: postgres
+      DB_SCHEMA: backend_ts
+      OTLP_ENDPOINT: http://grafana-otel:4318
+      # DB_DEBUG: 1
+      # DB_SSL: postgres # Production
+    volumes:
+      - /app/node_modules # Persist docker containers modules so that localhost are not used
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+    depends_on:
+      - redis
+      - placement
+      - zipkin
+      - postgres
+    restart: on-failure
+    networks:
+      - dapr-net
+  backend-ts-dapr:
+    labels:
+      - 'sos.service-type=microservice'
+      - 'dapr.io/enabled=true' # Enable Dapr for this service
+      - 'dapr.io/config=configstore'
+    image: 'docker.io/daprio/daprd:edge'
+    command:
+      [
+        './daprd',
+        '--app-id',
+        'backend-ts',
+        '--app-port',
+        '3001',
+        '--config',
+        '/configuration/config.yaml',
+        '--dapr-http-port',
+        '3500',
+        '--enable-api-logging',
+        '--enable-profiling',
+        '--log-as-json',
+        'true',
+        '--placement-host-address',
+        'placement:50005',
+        '--profile-port',
+        '7777',
+        '--resources-path',
+        '/components',
+      ]
+    volumes:
+      - './dapr/components/:/components'
+      - './dapr/config/:/configuration'
+      - ./dapr/config/dev-secrets.json:/dev-secrets.json
+    depends_on:
+      - backend-ts
+    network_mode: 'service:backend-ts'
+
+networks:
+  dapr-net: # here we set the network name
+    driver: bridge

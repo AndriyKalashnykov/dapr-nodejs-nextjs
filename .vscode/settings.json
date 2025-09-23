@@ -1,0 +1,47 @@
+{
+  "editor.defaultFormatter": "vscode.css-language-features",
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "always"
+  },
+  "editor.formatOnSave": true,
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "workbench.editor.customLabels.patterns": {
+    "**/route.ts": "${dirname}/${filename}.ts",
+    "{**/layout.tsx,**/page.tsx,**/template.tsx}": "${dirname}/${filename}.tsx"
+  },
+  "[terraform]": {
+    "editor.defaultFormatter": "gamunu.opentofu"
+  },
+  "[terraform-vars]": {
+    "editor.defaultFormatter": "gamunu.opentofu"
+  },
+  "files.exclude": {
+    "**/node_modules": false,
+    "**/build": false
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/build/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/build": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

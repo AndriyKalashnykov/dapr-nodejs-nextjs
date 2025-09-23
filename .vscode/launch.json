@@ -1,0 +1,40 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Podman: Node",
+      "port": "${input:debuggerPort}",
+      "request": "attach",
+      "address": "localhost",
+      "localRoot": "${workspaceFolder}/app/${input:appName}",
+      "remoteRoot": "/app",
+      "type": "node"
+    },
+    {
+      "name": "Local: Node",
+      "port": "${input:debuggerPort}",
+      "request": "attach",
+      "address": "localhost",
+      "localRoot": "${workspaceFolder}/app/${input:appName}",
+      "type": "node"
+    }
+  ],
+  "inputs": [
+    {
+      "type": "pickString",
+      "id": "appName",
+      "description": "Which app do you want to debug?",
+      "options": ["backend-ts", "web-nextjs"]
+    },
+    {
+      "type": "pickString",
+      "id": "debuggerPort",
+      "description": "What is the debugger port?",
+      "options": ["9229"],
+      "default": "9229"
+    }
+  ]
+}

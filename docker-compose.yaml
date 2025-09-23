@@ -1,0 +1,24 @@
+name: demo-ts
+
+# Add a new microservice docker-compose to the full stack
+include:
+#  - shared/dapr/docker-compose.yaml
+  - shared/db/docker-compose.yaml
+#  - shared/otel/docker-compose.yaml
+#  - app/web-react/docker-compose.yaml
+
+#  - app/backend-ts/docker-compose.yaml
+
+services:
+
+  shell:
+    profiles: [debug]
+    image: alpine:latest
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    networks:
+      - dapr-net
+
+networks:
+  dapr-net: # here we set the network name
+    driver: bridge

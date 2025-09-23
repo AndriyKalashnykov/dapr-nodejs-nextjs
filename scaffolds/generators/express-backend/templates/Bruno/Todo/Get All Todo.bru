@@ -1,0 +1,22 @@
+meta {
+  name: Get All Todo
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/todos?orderBy=completed&pageSize=111&orderDirection=asc
+  body: none
+  auth: none
+}
+
+params:query {
+  orderBy: completed
+  pageSize: 100
+  orderDirection: asc
+}
+
+headers {
+  dapr-app-id: <%= name %>
+  authorization: Bearer PUT-JWT-HERE
+}

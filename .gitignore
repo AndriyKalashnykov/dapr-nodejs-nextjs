@@ -1,0 +1,40 @@
+# Dapr and tsc build
+**/.dapr/logs
+build/
+
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea/
+
+# Local env files
+.env
+.env.*
+!.env.example
+
+vite.config.ts.timestamp-*
+
+openapi.yaml
+coverage
+
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+*.tfvars
+
+*.tsbuildinfo

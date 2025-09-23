@@ -1,0 +1,22 @@
+meta {
+  name: Get All Todo
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/todos?orderBy=completed&pageSize=111&orderDirection=asc
+  body: none
+  auth: none
+}
+
+params:query {
+  orderBy: completed
+  pageSize: 100
+  orderDirection: asc
+}
+
+headers {
+  dapr-app-id: backend-ts
+  authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMWIyYzMiLCJuYW1lIjoiSm9obiBEb2UiLCJpYXQiOjE1MTYyMzkwMjJ9.G5wdYS1G5gfd14BnsXrZ0JcLW0kB5ItFd7M_9elzjUQ
+}

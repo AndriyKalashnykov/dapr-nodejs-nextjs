@@ -1,0 +1,40 @@
+name: demo-ts
+
+services:
+  # Shared db
+  postgres:
+    image: "docker.io/postgres:17-alpine"
+    ports:
+      - "5432:5432"
+    restart: always
+    shm_size: 128mb
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - dapr-net
+  
+  postgres-build-dbs:
+    image: "docker.io/postgres:17-alpine"
+    command: build-dbs.sh
+    environment:
+      PGPASSWORD: postgres
+      POSTGRES_USER: postgres
+      DB_NAMES: postgres,postgres2
+      DB_SCHEMA_MAP: postgres:backend_ts,another_service;postgres2:backend_ts_test,another_service_test
+    volumes:
+      - ./build-dbs.sh:/usr/local/bin/build-dbs.sh
+    depends_on:
+      - postgres
+    networks:
+      - dapr-net
+  
+volumes:
+  db-data:
+  db:
+
+networks:
+  dapr-net: # here we set the network name
+    driver: bridge

@@ -1,0 +1,28 @@
+meta {
+  name: Update Todo
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/v1/todos/:id
+  body: json
+  auth: none
+}
+
+params:path {
+  id: 93e65029-5816-401b-913c-e4ae0de4ff39
+}
+
+headers {
+  dapr-app-id: backend-ts
+  authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMWIyYzMiLCJuYW1lIjoiSm9obiBEb2UiLCJpYXQiOjE1MTYyMzkwMjJ9.G5wdYS1G5gfd14BnsXrZ0JcLW0kB5ItFd7M_9elzjUQ
+}
+
+body:json {
+  {
+    "title": "updated todo",
+    "completed": true,
+    "dueAt": "2024-01-01"
+  }
+}

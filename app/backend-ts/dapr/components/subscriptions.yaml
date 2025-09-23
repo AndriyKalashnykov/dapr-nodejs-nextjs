@@ -1,0 +1,10 @@
+# https://docs.dapr.io/reference/resource-specs/subscription-schema/
+apiVersion: dapr.io/v2alpha
+kind: Subscription
+metadata:
+  name: todo-data-subscription
+spec:
+  topic: todo-data
+  routes:
+    default: /consumer/todo
+  pubsubname: redis-pubsub
