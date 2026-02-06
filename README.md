@@ -7,7 +7,7 @@
 
 ## Setup
 - (Windows) Install Podman, Podman Desktop and make sure the "Compose" extension is active.
-- (Not Windows) Install podman and docker-compose
+- (Not Windows) [Install podman](https://podman.io/docs/installation) and docker-compose
 ```bash
 sudo apt-get -y install podman docker-compose-plugin
 systemctl --user enable --now podman.socket
