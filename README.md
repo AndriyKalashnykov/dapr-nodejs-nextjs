@@ -15,9 +15,12 @@ export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
 ```
 
 ## Running the full stack
-The Makefile includes a target to launch the full stack (infrastructure, services) in `development` mode. In general, running `make` is the recommended way to build and launch a fresh stack everytime.
+The Makefile includes a target to launch the full stack (infrastructure, services) in `development` mode. In general, 
+running `make` is the recommended way to build and launch a fresh stack everytime.
 
-***Note: When you `ctrl-c` to exit a running stack, the Makefile will capture that and bring the entire stack down. If launching the stack shows errors about pre-existing containers running, you can run `make down` to tear down an existing stack or run `make` to launch a completely fresh stack.***
+***Note: When you `ctrl-c` to exit a running stack, the Makefile will capture that and bring the entire stack down. 
+If launching the stack shows errors about pre-existing containers running, you can run `make down` to tear down an 
+existing stack or run `make` to launch a completely fresh stack.***
 
 ### Commands
 - `make` : Tear down, build and launch a fresh full stack.
@@ -36,10 +39,13 @@ SERVICE=backend-ts make debug
 ...output...
 ```
 
-This behavior is intended to bring your service up in such a way that you can attach a debugger. The example in the `backend-ts` service launches a node app with port `9229` mapped and ready to attach the VSCode debugger.
+This behavior is intended to bring your service up in such a way that you can attach a debugger. 
+The example in the `backend-ts` service launches a node app with port `9229` mapped and ready to attach the VSCode debugger.
 
 # Backend DB migration strategy
-A common pattern for database migrations in a microservice environment is to have a deployment focused on performing the migration ahead of deploying the functional code updates. Performing database migrations are **expected to be non-breaking** to currently deployed code. In the rare case that a breaking change to the database must be deployed, these changes are expected to coincide with a downtime/maintenance window rollout.
+A common pattern for database migrations in a microservice environment is to have a deployment focused on performing 
+the migration ahead of deploying the functional code updates. Performing database migrations 
+are **expected to be non-breaking** to currently deployed code. In the rare case that a breaking change to the database must be deployed, these changes are expected to coincide with a downtime/maintenance window rollout.
 
 Below is a description of the process of creating and deploying a migration;
 
