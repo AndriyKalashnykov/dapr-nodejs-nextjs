@@ -164,11 +164,13 @@ jobs:
             --app-id backend-ts \
             --app-port 3001 \
             --dapr-http-port 3500 \
-            --components-path "$HOME/.dapr/components" \
-            --config "$HOME/.dapr/config.yaml" \
-            --log-level error &
+            --resources-path "$HOME/.dapr/components" \
+            --log-level info \
+            > /tmp/daprd.log 2>&1 &
+          echo "Waiting for Dapr sidecar on :3500..."
           timeout 30 bash -c \
-            'until curl -sf http://localhost:3500/v1.0/healthz > /dev/null; do sleep 1; done'
+            'until curl -sf http://localhost:3500/v1.0/healthz > /dev/null; do sleep 1; done' \
+            || { echo "=== daprd log ==="; cat /tmp/daprd.log; exit 1; }
 
       - name: Create test schema
         run: psql -h localhost -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;"
