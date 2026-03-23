@@ -1,43 +1,15 @@
 # Build
-# FROM docker.io/node:22-alpine AS build
-# ENV NODE_ENV=development
-# WORKDIR /workspace/app/backend-ts
-# COPY package.json tsconfig.json .
-# RUN npm install
+FROM microservice-sdk-build AS build
+ENV NODE_ENV=development
+WORKDIR /workspace/app/backend-ts
+COPY package.json tsconfig.json .
+RUN npm install
 
 # Run
-# FROM docker.io/node:22-alpine AS runtime
-# WORKDIR /workspace/app/backend-ts
-# COPY --from=build /workspace/app/backend-ts /workspace/app/backend-ts
-# COPY /src /workspace/app/backend-ts/src
-# EXPOSE 3001
-# WORKDIR /workspace
-# CMD [ "npm", "run", "dev", "-w", "app/backend-ts" ]
-
-# Build
-FROM docker.io/node:22-alpine AS build
-ENV NODE_ENV=production
-WORKDIR /app
-
-# Copy the SDK package
-COPY packages/@sos/sdk packages/@sos/sdk/
-
-# Pack the SDK into a tarball
-WORKDIR /app/packages/@sos/sdk
-RUN npm ci && npm run compile && npm pack
-
-# Install the backend dependencies
-WORKDIR /app
-COPY app/backend-ts/package.json ./
-RUN npm ci --omit=dev && npm install ./packages/@sos/sdk/sos-sdk-0.0.1.tgz
-
-# Run
-FROM docker.io/node:22-alpine AS runtime
-WORKDIR /app
-COPY --from=build /app/node_modules /app/node_modules
-COPY app/backend-ts/src /app/src
-EXPOSE 3000
-CMD [ "npm", "run", "start" ]
-
-
-
+FROM microservice-sdk-build
+WORKDIR /workspace/app/backend-ts
+COPY --from=build /workspace/app/backend-ts /workspace/app/backend-ts
+COPY /src /workspace/app/backend-ts/src
+EXPOSE 3001
+WORKDIR /workspace
+CMD [ "npm", "run", "dev", "-w", "app/backend-ts" ]

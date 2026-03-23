@@ -16,7 +16,7 @@ env:
 jobs:
   # ── Shared SDK ────────────────────────────────────────────────────────────────
   sdk:
-    name: SDK – compile & test
+    name: SDK – compile, lint & test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,16 +26,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - run: npm ci
-
-      - name: Compile
-        run: npm run compile -w packages/@sos/sdk
-
-      - name: Lint & typecheck
-        run: npm run ci -w packages/@sos/sdk
-
-      - name: Unit tests
-        run: npm run test:cov -w packages/@sos/sdk
+      - name: Compile, lint & test
+        run: make sdk-ci
 
       - uses: actions/upload-artifact@v4
         with:
@@ -56,14 +48,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - run: npm ci
-
       - uses: actions/download-artifact@v4
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      - run: npm run ci -w app/backend-ts
+      - name: Lint & typecheck
+        run: make backend-lint
 
   backend-unit:
     name: Backend – unit tests
@@ -77,15 +68,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - run: npm ci
-
       - uses: actions/download-artifact@v4
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      - name: Run unit tests
-        run: npm run test:cov -w app/backend-ts
+      - name: Unit tests
+        run: make backend-test
         env:
           SERVICE_NAME: backend-ts
 
@@ -113,8 +102,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
-      - run: npm ci
 
       - uses: actions/download-artifact@v4
         with:
@@ -180,8 +167,8 @@ jobs:
         env:
           PGPASSWORD: postgres
 
-      - name: Run integration tests
-        run: npm run test:integration:cov -w app/backend-ts
+      - name: Integration tests
+        run: make backend-test-integration
         env:
           NODE_ENV: test
           SERVICE_NAME: backend-ts
@@ -205,14 +192,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - run: npm ci
-
-      - run: npm run lint -w app/web-nextjs
-
-      - name: Build
-        run: npm run build -w app/web-nextjs
-        env:
-          JWT_SECRET_KEY: ci-build-placeholder
+      - name: Lint & build
+        run: make web-nextjs-ci
 
   web-react:
     name: Web (React) – lint & build
@@ -225,8 +206,5 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - run: npm ci
-
-      - run: npm run lint -w app/web-react
-
-      - run: npm run build -w app/web-react
+      - name: Lint & build
+        run: make web-react-ci

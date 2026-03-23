@@ -2,12 +2,12 @@ name: demo-ts
 
 # Add a new microservice docker-compose to the full stack
 include:
-#  - shared/dapr/docker-compose.yaml
+  - shared/dapr/docker-compose.yaml
   - shared/db/docker-compose.yaml
-#  - shared/otel/docker-compose.yaml
-#  - app/web-react/docker-compose.yaml
-
-#  - app/backend-ts/docker-compose.yaml
+  # - shared/otel/docker-compose.yaml
+  - app/backend-ts/docker-compose.yaml
+  - app/web-nextjs/docker-compose.yaml
+  - app/web-react/docker-compose.yaml
 
 services:
 

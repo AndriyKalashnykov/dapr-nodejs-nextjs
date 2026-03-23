@@ -15,7 +15,7 @@ This guide walks you through setting up a development environment for use as a s
 - **Fedora 40+**
 - **Red Hat Enterprise Linux 9.5+**
 
-# Setup Unbuntu 25.04 VM in Azure
+# Setup Ubuntu 25.04 VM in Azure
 
 ## 🖥️ Create Ubuntu 25 VM using Canonical Ubuntu 25.04 from the Marketplace
 
@@ -99,40 +99,26 @@ fnm install 22
 
 ## 🧪 Setup Demo Project
 
-Copy the demo project into the `azureuser` home directory.
-
-Repository: https://github.com/revgum/demo-ts
-
-Install dependencies:
+Clone the project into the `azureuser` home directory:
 
 ```bash
-cd ~/demo-ts
-
-# Backend
-cd app/backend-ts
-npm i
-
-# Frontend
-cd ../web-nextjs
-npm i
+git clone https://github.com/AndriyKalashnykov/dapr-nodejs-nextjs.git ~/dapr-nodejs-nextjs
+cd ~/dapr-nodejs-nextjs
 ```
 
-Run commands to build the project:
+Install dependencies and build:
 
 ```bash
-cd ~/demo-ts
-
-# Setup is only necessary for the first time
-make setup
-
-# Build and launch the services
-make
+make install        # Install npm packages
+make setup          # Build base Docker images (first time only)
+make build          # Build service containers
+make up             # Start the full stack
 ```
 ---
-## 🖥️ Open another terminal session while the demo project is running
+## 🖥️ Open another terminal session while the project is running
 Example uses for this terminal session:
 - Run `curl` commands to test the API
-- Edit `~/demo-ts/app/backend-ts/src/*` files for live reloading and development
+- Edit `~/dapr-nodejs-nextjs/app/backend-ts/src/*` files for live reloading and development
 
 ---
 
