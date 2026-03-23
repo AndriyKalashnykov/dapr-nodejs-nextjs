@@ -203,7 +203,10 @@ jobs:
 
       - run: npm run lint -w app/web-nextjs
 
-      - run: npm run build -w app/web-nextjs
+      - name: Build
+        run: npm run build -w app/web-nextjs
+        env:
+          JWT_SECRET_KEY: ci-build-placeholder
 
   web-react:
     name: Web (React) – lint & build

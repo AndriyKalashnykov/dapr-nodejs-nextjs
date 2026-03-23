@@ -3,6 +3,7 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 
 export default [
+  { ignores: ['build/**'] },
   eslintJs.configs.recommended,
   eslintConfigPrettier,
   {
