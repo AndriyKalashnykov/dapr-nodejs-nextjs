@@ -1,0 +1,223 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # ── Shared SDK ────────────────────────────────────────────────────────────────
+  sdk:
+    name: SDK – compile & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Compile
+        run: npm run compile -w packages/@sos/sdk
+
+      - name: Lint & typecheck
+        run: npm run ci -w packages/@sos/sdk
+
+      - name: Unit tests
+        run: npm run test:cov -w packages/@sos/sdk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-build
+          path: packages/@sos/sdk/build
+          retention-days: 1
+
+  # ── Backend ───────────────────────────────────────────────────────────────────
+  backend-ci:
+    name: Backend – lint & typecheck
+    needs: sdk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-build
+          path: packages/@sos/sdk/build
+
+      - run: npm run ci -w app/backend-ts
+
+  backend-unit:
+    name: Backend – unit tests
+    needs: sdk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-build
+          path: packages/@sos/sdk/build
+
+      - name: Run unit tests
+        run: npm run test:cov -w app/backend-ts
+        env:
+          SERVICE_NAME: backend-ts
+
+  backend-integration:
+    name: Backend – integration tests
+    needs: sdk
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-build
+          path: packages/@sos/sdk/build
+
+      - name: Install Dapr CLI
+        uses: dapr/setup-dapr@v2
+        with:
+          version: '1.15.0'
+
+      - name: Initialize Dapr (slim – no Docker needed)
+        run: dapr init --slim
+
+      # buildServiceContext() calls Secrets.get() → Dapr local-secretstore → this file
+      - name: Configure Dapr local secretstore
+        run: |
+          mkdir -p "$HOME/.dapr/components"
+
+          cat > "$HOME/.dapr/components/local-secretstore.yaml" <<'EOF'
+          apiVersion: dapr.io/v1alpha1
+          kind: Component
+          metadata:
+            name: local-secretstore
+          spec:
+            type: secretstores.local.file
+            version: v1
+            metadata:
+              - name: secretsFile
+                value: /home/runner/.dapr/secrets.json
+          EOF
+
+          cat > "$HOME/.dapr/secrets.json" <<'EOF'
+          {
+            "serviceSecrets": {
+              "JWT_SECRET": "ci-test-jwt-secret",
+              "DB_USER": "postgres",
+              "DB_PASSWORD": "postgres"
+            }
+          }
+          EOF
+
+      - name: Start Dapr sidecar
+        run: |
+          daprd \
+            --app-id backend-ts \
+            --app-port 3001 \
+            --dapr-http-port 3500 \
+            --components-path "$HOME/.dapr/components" \
+            --config "$HOME/.dapr/config.yaml" \
+            --log-level error &
+          timeout 30 bash -c \
+            'until curl -sf http://localhost:3500/v1.0/healthz > /dev/null; do sleep 1; done'
+
+      - name: Create test schema
+        run: psql -h localhost -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;"
+        env:
+          PGPASSWORD: postgres
+
+      - name: Run integration tests
+        run: npm run test:integration:cov -w app/backend-ts
+        env:
+          NODE_ENV: test
+          SERVICE_NAME: backend-ts
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_NAME: postgres
+          DB_SCHEMA: backend_ts
+          JWT_SECRET_KEY: ci-test-jwt-secret
+          DAPR_HOST: localhost
+          DAPR_PORT: '3500'
+
+  # ── Frontends ─────────────────────────────────────────────────────────────────
+  web-nextjs:
+    name: Web (Next.js) – lint & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint -w app/web-nextjs
+
+      - run: npm run build -w app/web-nextjs
+
+  web-react:
+    name: Web (React) – lint & build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint -w app/web-react
+
+      - run: npm run build -w app/web-react
