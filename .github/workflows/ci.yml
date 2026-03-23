@@ -154,7 +154,7 @@ jobs:
           cat > "$HOME/.dapr/secrets.json" <<'EOF'
           {
             "serviceSecrets": {
-              "JWT_SECRET": "ci-test-jwt-secret",
+              "JWT_SECRET": "secret",
               "DB_USER": "postgres",
               "DB_PASSWORD": "postgres"
             }
@@ -189,7 +189,7 @@ jobs:
           DB_PORT: '5432'
           DB_NAME: postgres
           DB_SCHEMA: backend_ts
-          JWT_SECRET_KEY: ci-test-jwt-secret
+          JWT_SECRET_KEY: secret
           DAPR_HOST: localhost
           DAPR_PORT: '3500'
 
