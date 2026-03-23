@@ -159,6 +159,7 @@ jobs:
 
       - name: Start Dapr sidecar
         run: |
+          export PATH="$HOME/.dapr/bin:$PATH"
           daprd \
             --app-id backend-ts \
             --app-port 3001 \
