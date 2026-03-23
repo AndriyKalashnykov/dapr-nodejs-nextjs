@@ -145,6 +145,10 @@ jobs:
             metadata:
               - name: secretsFile
                 value: /home/runner/.dapr/secrets.json
+              - name: nestedSeparator
+                value: ':'
+              - name: multiValued
+                value: 'true'
           EOF
 
           cat > "$HOME/.dapr/secrets.json" <<'EOF'
