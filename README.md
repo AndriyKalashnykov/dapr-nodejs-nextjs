@@ -59,6 +59,24 @@ Once running, services are available at:
 | Zipkin tracing | http://localhost:9411 |
 | PostgreSQL | localhost:5432 (user/pass: `postgres`) |
 
+### Calling the Backend API
+
+The backend requires a JWT token. Generate one and call the API:
+
+```bash
+# Generate a dev token (JWT_SECRET_KEY matches docker-compose: "secret")
+TOKEN=$(node -e "console.log(require('jsonwebtoken').sign({sub:'dev-user'}, 'secret'))")
+
+# Direct access (port 3001)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/todos
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"title":"My todo"}' http://localhost:3001/api/v1/todos
+
+# Via Dapr service invocation (port 3500)
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3500/v1.0/invoke/backend-ts/method/api/v1/todos
+```
+
 ## Makefile reference
 
 Run `make help` to see all targets. Key commands:
