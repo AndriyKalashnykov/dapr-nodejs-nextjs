@@ -116,16 +116,17 @@ scaffolds/        Code generators for new services
 
 ### Service Ports (when stack is running)
 
-| Service | Host Port |
-|---|---|
-| Next.js frontend | 3000 |
-| React frontend | 3100 |
-| Backend (via Dapr sidecar) | 3500 |
-| PostgreSQL | 5432 |
-| Redis | 6379 |
-| Zipkin | 9411 |
-| Dapr Dashboard | 8888 |
-| Grafana OTEL (if enabled) | 3200 |
+| Service | Host Port | Access |
+|---|---|---|
+| Next.js frontend | 3000 | `http://localhost:3000` |
+| React frontend | 3100 | `http://localhost:3100` |
+| Backend API (via Dapr) | 3500 | `http://localhost:3500/v1.0/invoke/backend-ts/method/...` |
+| Swagger UI (via Dapr) | 3500 | `http://localhost:3500/v1.0/invoke/backend-ts/method/docs` |
+| PostgreSQL | 5432 | |
+| Redis | 6379 | |
+| Zipkin | 9411 | `http://localhost:9411` |
+| Dapr Dashboard | 8888 | `http://localhost:8888` |
+| Grafana OTEL (if enabled) | 3200 | `http://localhost:3200` |
 
 ### Dapr Sidecar Pattern
 Every backend service runs as two containers: the app + a Dapr sidecar. The sidecar proxies all inter-service communication:

@@ -52,8 +52,8 @@ Once running, services are available at:
 |---|---|
 | Next.js frontend | http://localhost:3000 |
 | React frontend | http://localhost:3100 |
-| Backend (via Dapr sidecar) | http://localhost:3500 |
-| Swagger UI | http://localhost:3500/docs |
+| Backend API (via Dapr) | http://localhost:3500/v1.0/invoke/backend-ts/method/api/v1/todos |
+| Swagger UI (via Dapr) | http://localhost:3500/v1.0/invoke/backend-ts/method/docs |
 | Dapr Dashboard | http://localhost:8888 |
 | Zipkin tracing | http://localhost:9411 |
 | PostgreSQL | localhost:5432 (user/pass: `postgres`) |
