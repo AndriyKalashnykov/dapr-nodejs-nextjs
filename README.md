@@ -1,3 +1,8 @@
+[![ci](https://github.com/AndriyKalashnykov/dapr-nodejs-nextjs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AndriyKalashnykov/dapr-nodejs-nextjs/actions/workflows/ci.yml)
+[![Hits](https://hits.sh/github.com/AndriyKalashnykov/dapr-nodejs-nextjs.svg?view=today-total&style=plastic)](https://hits.sh/github.com/AndriyKalashnykov/dapr-nodejs-nextjs/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
+[![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://app.renovatebot.com/dashboard#github/AndriyKalashnykov/dapr-nodejs-nextjs)
+
 # Dapr Node.js + Next.js Microservices Platform
 
 A reference implementation for building microservices with Node.js, TypeScript, and [Dapr](https://dapr.io/). The project ships a todo-list API backend (Express 5), two frontends (Next.js SSR and React SPA), and a shared SDK — all wired together through Dapr sidecars for state management (Redis), pub/sub messaging, and service-to-service invocation. The monorepo uses npm workspaces, containerized with [Podman](https://podman.io/) (Docker-compatible), and includes PostgreSQL for persistence, OpenTelemetry for observability, and Knex.js for database migrations.
