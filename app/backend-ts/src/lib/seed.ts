@@ -14,6 +14,6 @@ export const loadSeedData = async (context: Context<ContextKind>) => {
     logger.info(`Created new Todo model: ${JSON.stringify(record)}`);
   } catch (error) {
     await trx.rollback();
-    logger.error('Error creating seed data:', error);
+    logger.error({ err: error }, 'Error creating seed data');
   }
 };

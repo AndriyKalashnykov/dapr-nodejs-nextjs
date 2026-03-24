@@ -6,7 +6,7 @@
     "dev": "WATCHPACK_POLLING=true next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@dapr/dapr": "^3.4.1",
@@ -18,13 +18,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.8",
-    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^24.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^10.0.0",
+    "eslint": "^9.25.0",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
     "typescript": "^6.0.0"

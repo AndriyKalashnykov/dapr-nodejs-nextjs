@@ -25,7 +25,7 @@ type HandlerParams = {
   error: Error | null;
   output: FlatObject | null;
   response: Response;
-  options: FlatObject;
+  ctx: FlatObject;
   logger: BaseLogger;
 };
 
@@ -45,7 +45,7 @@ const consumerResultsHandler = <K>({ context }: ConsumerFactoryArgs<K>) =>
     }),
     handler: (params: HandlerParams) => {
       const { error, output, response, logger } = params;
-      const { consumerStart } = params.options as ConsumerOptions<K>;
+      const { consumerStart } = params.ctx as ConsumerOptions<K>;
       const counter = createCounter(context);
       const timer = createTimer(context);
 
@@ -86,6 +86,6 @@ export const consumersFactory = <K>(args: ConsumerFactoryArgs<K>) =>
      * - context : A context for this specific handler
      * - consumerStart : The start time for this message being consumed
      */
-    .addOptions<ConsumerOptions<K>>(async () => {
+    .addContext<ConsumerOptions<K>>(async () => {
       return { context: args.context, consumerStart: performance.now() };
     });

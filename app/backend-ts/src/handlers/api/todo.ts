@@ -35,7 +35,7 @@ export const getAllTodo = (context: Context<ContextKind>) =>
     method: 'get',
     input: createQueryParamsSchema(TodoQueryFields),
     output: ApiPayloadSchema,
-    handler: async ({ options: { context }, logger, input }) => {
+    handler: async ({ ctx: { context }, logger, input }) => {
       try {
         const payload = await TodoService.getAllTodo({
           serviceParams: { context, logger },
@@ -60,7 +60,7 @@ export const createTodo = (context: Context<ContextKind>) =>
     method: 'post',
     input: TodoCreateSchema,
     output: ApiPayloadSchema,
-    handler: async ({ input, options: { context }, logger }) => {
+    handler: async ({ input, ctx: { context }, logger }) => {
       try {
         const payload = await TodoService.createTodo({ context, logger, input });
         return buildResponse(TodoSchema, context, payload);
@@ -82,7 +82,7 @@ export const getTodoById = (context: Context<ContextKind>) =>
     method: 'get',
     input: UuidParamsSchema,
     output: ApiPayloadSchema,
-    handler: async ({ input, options: { context }, logger }) => {
+    handler: async ({ input, ctx: { context }, logger }) => {
       try {
         const payload = await TodoService.getTodoById({ context, logger, input: input.id });
         return buildResponse(TodoSchema, context, payload);
@@ -104,7 +104,7 @@ export const updateTodoById = (context: Context<ContextKind>) =>
     method: ['put', 'patch'],
     input: UuidParamsSchema.merge(TodoUpdateSchema),
     output: ApiPayloadSchema,
-    handler: async ({ input, options: { context }, logger }) => {
+    handler: async ({ input, ctx: { context }, logger }) => {
       try {
         const payload = await TodoService.updateTodoById({ context, logger, input });
         return buildResponse(TodoSchema, context, payload);
@@ -126,7 +126,7 @@ export const deleteTodoById = (context: Context<ContextKind>) =>
     method: 'delete',
     input: UuidParamsSchema,
     output: ApiPayloadSchema,
-    handler: async ({ input, options: { context }, logger }) => {
+    handler: async ({ input, ctx: { context }, logger }) => {
       try {
         const payload = await TodoService.deleteTodoById({ context, logger, input: input.id });
         return buildResponse(TodoSchema, context, payload);

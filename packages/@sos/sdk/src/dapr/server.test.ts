@@ -18,7 +18,9 @@ describe('buildDaprServer', () => {
 
   it('should create a new DaprServer instance if none exists', () => {
     const mockDaprServerInstance = {};
-    (DaprServer as unknown as Mock).mockImplementation(() => mockDaprServerInstance);
+    (DaprServer as unknown as Mock).mockImplementation(function () {
+      return mockDaprServerInstance;
+    });
 
     const server = buildDaprServer(mockContext, mockApp);
 

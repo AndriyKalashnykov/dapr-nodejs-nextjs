@@ -1,7 +1,7 @@
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
-import { Resource } from '@opentelemetry/resources';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import * as opentelemetry from '@opentelemetry/sdk-node';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
@@ -11,7 +11,7 @@ const serviceName = process.env.SERVICE_NAME || 'service-name-unknown';
 
 if (otlpEndpoint) {
   const sdk = new opentelemetry.NodeSDK({
-    resource: new Resource({
+    resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: serviceName,
       [ATTR_SERVICE_VERSION]: '1.0',
     }),

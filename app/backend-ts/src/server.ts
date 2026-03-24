@@ -6,13 +6,7 @@ import { loadSeedData } from '@/lib/seed';
 import type { ContextKind } from '@/types';
 import { Api, Dapr, buildServiceContext, type Context } from '@sos/sdk';
 import express from 'express';
-import {
-  DependsOnMethod,
-  ServeStatic,
-  createConfig,
-  createServer,
-  type Routing,
-} from 'express-zod-api';
+import { ServeStatic, createConfig, createServer, type Routing } from 'express-zod-api';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import ui from 'swagger-ui-express';
@@ -40,13 +34,12 @@ const serverRouting = (context: Context<ContextKind>) =>
   ({
     api: {
       v1: {
-        todos: new DependsOnMethod({
+        todos: {
           // GET: /api/v1/todos
           get: TodoApiHandlers.getAllTodo(context),
           // POST: /api/v1/todos
           post: TodoApiHandlers.createTodo(context),
-        }).nest({
-          ':id': new DependsOnMethod({
+          ':id': {
             // GET: /api/v1/todos/{id}
             get: TodoApiHandlers.getTodoById(context),
             // PUT: /api/v1/todos/{id}
@@ -55,8 +48,8 @@ const serverRouting = (context: Context<ContextKind>) =>
             patch: TodoApiHandlers.updateTodoById(context),
             // DELETE: /api/v1/todos/{id}
             delete: TodoApiHandlers.deleteTodoById(context),
-          }),
-        }),
+          },
+        },
       },
     },
     consumer: {

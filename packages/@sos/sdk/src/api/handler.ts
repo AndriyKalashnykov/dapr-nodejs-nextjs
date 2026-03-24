@@ -30,7 +30,7 @@ type HandlerParams = {
   error: Error | null;
   output: FlatObject | null;
   response: Response;
-  options: FlatObject;
+  ctx: FlatObject;
 };
 
 export const defaultErrorHandler = new ResultHandler({
@@ -96,9 +96,9 @@ const apiResultsHandler = <T extends ZodTypeAny, C>(kind: string, itemSchema: T)
       mimeType: 'application/json',
     }),
     handler: (params: HandlerParams) => {
-      const { error, output, response, options } = params;
-      const { requestId, requestStart } = options as EndpointOptions<C>;
-      const context = options.context as Context<C>;
+      const { error, output, response, ctx } = params;
+      const { requestId, requestStart } = ctx as EndpointOptions<C>;
+      const context = ctx.context as Context<C>;
 
       const counter = createCounter(context, context.handlerEndpoint);
       const timer = createTimer(context, context.handlerEndpoint);
@@ -157,7 +157,7 @@ export const endpointsFactory = <C, T extends ZodTypeAny>(
      * - context.api.kind : The data "kind" for the handler built by the factory
      */
     // Execute the authentication middleware on every request
-    .addOptions<EndpointOptions<Context<C>>>(async () => {
+    .addContext<EndpointOptions<Context<C>>>(async () => {
       return {
         requestId: randomUUID(),
         requestStart: performance.now(),
