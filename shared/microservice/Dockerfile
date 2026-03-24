@@ -1,4 +1,4 @@
-FROM docker.io/node:22-alpine
+FROM docker.io/node:24-alpine
 
 # Certicate
 ENV CERT_HOME=/usr/local/share/ca-certificates
