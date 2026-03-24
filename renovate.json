@@ -16,7 +16,7 @@
   "automergeType": "pr",
   "automergeStrategy": "squash",
   "ignoreTests": false,
-  "ignoreDeps": ["@sos/sdk"],
+  "ignorePaths": ["scaffolds/**"],
   "packageRules": [
     {
       "description": "Group all Next.js related packages",
