@@ -212,6 +212,26 @@ make lint              # lint + typecheck + prettier across all workspaces
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (lint + test + build)
 ```
+After code or configuration changes, start the full stack and validate all services:
+```bash
+make build             # rebuild service containers
+make up -d             # start the stack (detached)
+```
+Verify all URLs from the README "Start, test, stop" section are reachable and return expected results:
+- `http://localhost:3000` — Next.js frontend loads HTML
+- `http://localhost:3100` — React frontend loads HTML
+- `http://localhost:3001/docs` — Swagger UI loads in browser
+- `http://localhost:8888` — Dapr Dashboard loads
+- `http://localhost:9411` — Zipkin tracing loads
+
+Verify the "Calling the Backend API" section works:
+```bash
+TOKEN=$(node -e "console.log(require('jsonwebtoken').sign({sub:'dev-user'}, 'secret'))")
+curl -sf -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/todos
+curl -sf -H "Authorization: Bearer $TOKEN" http://localhost:3500/v1.0/invoke/backend-ts/method/api/v1/todos
+```
+Both should return a JSON response with `apiVersion` and `data`.
+
 After pushing, watch the remote CI run to confirm it passes:
 ```bash
 gh run watch           # watch the latest CI run
