@@ -7,6 +7,8 @@ A reference implementation for building microservices with Node.js, TypeScript, 
 - [Node.js 24+](https://nodejs.org/)
 - [Podman 4.9+](https://podman.io/docs/installation) with Compose (Docker-compatible)
 - [Dapr CLI 1.17+](https://docs.dapr.io/getting-started/install-dapr-cli/)
+- [PostgreSQL 18+](https://www.postgresql.org/) (runs in container)
+- [Next.js 16+](https://nextjs.org/) (installed via npm)
 
 Run `make deps` to check and auto-install missing dependencies.
 
