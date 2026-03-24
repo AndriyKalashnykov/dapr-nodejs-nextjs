@@ -120,7 +120,8 @@ test: install
 
 #test-integration: @ Run backend integration tests (requires Postgres + Dapr sidecar)
 test-integration: install
-	@npm run test:integration:cov -w app/backend-ts
+	@podman exec demo-ts-postgres-1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;" 2>/dev/null || true
+	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 npm run test:integration:cov -w app/backend-ts
 
 # ── Per-workspace CI targets (used by GitHub Actions) ────────────────────────
 
@@ -140,7 +141,7 @@ backend-test: install
 
 #backend-test-integration: @ Backend: integration tests with coverage (requires Postgres + Dapr)
 backend-test-integration: install
-	@npm run test:integration:cov -w app/backend-ts
+	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 npm run test:integration:cov -w app/backend-ts
 
 #web-nextjs-ci: @ Next.js: lint and build
 web-nextjs-ci: install

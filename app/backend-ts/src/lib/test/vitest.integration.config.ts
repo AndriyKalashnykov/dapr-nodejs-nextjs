@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     maxConcurrency: 1, // Safest because of db truncation between tests
+    fileParallelism: false, // Run test files sequentially to avoid DB race conditions
     globals: true,
     environment: 'node',
     setupFiles: ['./src/lib/test/vitest.integration.setup.ts'],
