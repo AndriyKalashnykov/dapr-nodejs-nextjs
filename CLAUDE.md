@@ -79,7 +79,7 @@ cd app/backend-ts && NODE_ENV=test npx vitest --config src/lib/test/vitest.integ
 ```bash
 npm run dev    # Next.js dev server
 npm run build  # Production build (requires JWT_SECRET_KEY env var)
-npm run lint   # next lint
+npm run lint   # eslint .
 ```
 
 ### Frontend (`app/web-react`)
@@ -101,13 +101,13 @@ npm run ci       # tsc --noEmit + lint + prettier
 ```
 app/
   backend-ts/     Express 5 + Dapr sidecar backend
-  web-nextjs/     Next.js 15 SSR frontend
+  web-nextjs/     Next.js 16 SSR frontend
   web-react/      Vite/React SPA frontend
 packages/@sos/
   sdk/            Shared Dapr/DB/API utilities (must compile first — other packages depend on build/)
 shared/
   dapr/           Dapr runtime config & components (Redis state/pubsub, Zipkin)
-  db/             PostgreSQL 17 docker-compose + schema init
+  db/             PostgreSQL 18 docker-compose + schema init
   otel/           OpenTelemetry collector + Grafana stack
   microservice/   Base Docker image for all services
 infra/            Azure Terraform configs
@@ -164,7 +164,7 @@ Each backend feature follows a strict three-layer architecture:
 - Cache keys follow format: `<stateName>:<tableName>:<id>`
 
 ### Database
-- PostgreSQL 17 with Knex.js for migrations and query building
+- PostgreSQL 18 with Knex.js for migrations and query building
 - Schema per service: `backend_ts` (prod), `backend_ts_test` (integration tests) — the `_test` suffix is auto-appended when `NODE_ENV=test`
 - Migrations live in `app/backend-ts/src/db/migrations/`
 - DB credentials come from Dapr secretstore (not env vars) — see `buildServiceContext()` in SDK
@@ -172,7 +172,7 @@ Each backend feature follows a strict three-layer architecture:
 ### Testing
 - **Unit tests**: `*.test.ts` — Vitest with mocked Dapr and SDK context (see `vitest.setup.ts`)
 - **Integration tests**: `*.integration.test.ts` — real Postgres + Dapr sidecar. Tables truncated between tests. `maxConcurrency: 1` to avoid DB race conditions.
-- Framework: Vitest 3 with supertest for HTTP testing
+- Framework: Vitest 4 with supertest for HTTP testing
 - Test helpers: `getAuthHeader()` generates JWT tokens, `expectApiDataResponse()`/`expectApiError()` for assertions
 
 ### CI Pipeline (`.github/workflows/ci.yml`)

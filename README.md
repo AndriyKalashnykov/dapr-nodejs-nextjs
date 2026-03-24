@@ -4,7 +4,7 @@ A reference implementation for building microservices with Node.js, TypeScript, 
 
 ## Prerequisites
 
-- [Node.js 22+](https://nodejs.org/)
+- [Node.js 24+](https://nodejs.org/)
 - [Podman](https://podman.io/docs/installation) with Compose
 - [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/)
 
