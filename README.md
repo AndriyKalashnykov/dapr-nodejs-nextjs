@@ -52,11 +52,20 @@ Once running, services are available at:
 |---|---|
 | Next.js frontend | http://localhost:3000 |
 | React frontend | http://localhost:3100 |
-| Backend API (via Dapr) | http://localhost:3500/v1.0/invoke/backend-ts/method/api/v1/todos |
-| Swagger UI (via Dapr) | http://localhost:3500/v1.0/invoke/backend-ts/method/docs |
 | Dapr Dashboard | http://localhost:8888 |
 | Zipkin tracing | http://localhost:9411 |
 | PostgreSQL | localhost:5432 (user/pass: `postgres`) |
+
+The backend is not exposed directly — all access goes through the Dapr sidecar on port 3500 using [service invocation](https://docs.dapr.io/developing-applications/building-blocks/service-invocation/):
+```bash
+# API example
+curl http://localhost:3500/v1.0/invoke/backend-ts/method/api/v1/todos
+
+# OpenAPI spec (JSON)
+curl http://localhost:3500/v1.0/invoke/backend-ts/method/public/openapi.yaml
+```
+
+> **Note:** Swagger UI (`/docs`) serves HTML with relative asset paths that don't resolve through Dapr invoke in a browser. Use the OpenAPI spec with tools like [Swagger Editor](https://editor.swagger.io/) or import it into Postman instead.
 
 ## Makefile reference
 
