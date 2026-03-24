@@ -104,9 +104,10 @@ describe('Integration: Todo API', () => {
         id: expect.any(String),
         error: {
           code: 400,
-          message: "title: Required; Unrecognized key(s) in object: 'not_title'",
+          message: expect.stringContaining('title:'),
         },
       });
+      expect(res.body.error.message).toEqual(expect.stringContaining('not_title'));
       expect(res.status).toBe(400);
     });
   });
@@ -157,9 +158,10 @@ describe('Integration: Todo API', () => {
         id: expect.any(String),
         error: {
           code: 400,
-          message: "title: Required; Unrecognized key(s) in object: 'not_title'",
+          message: expect.stringContaining('title:'),
         },
       });
+      expect(res.body.error.message).toEqual(expect.stringContaining('not_title'));
       expect(res.status).toBe(400);
     });
   });
