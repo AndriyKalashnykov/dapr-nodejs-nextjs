@@ -33,7 +33,7 @@
     "@opentelemetry/semantic-conventions": "^1.30.0",
     "compression": "^1.8.0",
     "express": "^5.1.0",
-    "express-zod-api": "^22.13.1",
+    "express-zod-api": "^23.6.0",
     "helmet": "^8.1.0",
     "http-errors": "^2.0.0",
     "jsonwebtoken": "^9.0.2",
