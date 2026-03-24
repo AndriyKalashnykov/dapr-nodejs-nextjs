@@ -208,3 +208,17 @@ jobs:
 
       - name: Lint & build
         run: make web-react-ci
+
+  # ── Gate ───────────────────────────────────────────────────────────────────
+  ci-pass:
+    name: CI ✓
+    if: always()
+    needs: [sdk, backend-ci, backend-unit, backend-integration, web-nextjs, web-react]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
