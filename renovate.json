@@ -16,8 +16,12 @@
   "automergeType": "pr",
   "automergeStrategy": "squash",
   "ignoreTests": false,
-  "ignorePaths": ["scaffolds/**"],
   "packageRules": [
+    {
+      "description": "Skip scaffold templates - code generation templates, not real packages",
+      "matchFileNames": ["scaffolds/**"],
+      "enabled": false
+    },
     {
       "description": "Group all Next.js related packages",
       "matchPackageNames": ["next", "eslint-config-next"],
