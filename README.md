@@ -5,10 +5,27 @@ A reference implementation for building microservices with Node.js, TypeScript, 
 ## Prerequisites
 
 - [Node.js 24+](https://nodejs.org/)
-- [Podman](https://podman.io/docs/installation) with Compose
-- [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/)
+- [Podman 4.9+](https://podman.io/docs/installation) with Compose (Docker-compatible)
+- [Dapr CLI 1.17+](https://docs.dapr.io/getting-started/install-dapr-cli/)
 
 Run `make deps` to check and auto-install missing dependencies.
+
+## Key Versions
+
+| Component | Version |
+|---|---|
+| Node.js | 24 |
+| TypeScript | 6 |
+| Next.js | 16 |
+| React | 19 |
+| Express | 5 |
+| Vite | 8 |
+| Vitest | 4 |
+| Zod | 4 |
+| Pino | 10 |
+| PostgreSQL | 18 |
+| Redis | 8 |
+| Dapr CLI | 1.17 |
 
 **Linux setup:**
 ```bash
