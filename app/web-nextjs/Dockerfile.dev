@@ -1,5 +1,5 @@
 # Build
-FROM docker.io/node:22-alpine AS build
+FROM docker.io/node:24-alpine AS build
 ENV NODE_ENV=development
 WORKDIR /app
 COPY package.json next.config.ts postcss.config.mjs tsconfig.json eslint.config.mjs .
@@ -8,7 +8,7 @@ WORKDIR /app/public
 COPY public .
 
 # Run
-FROM docker.io/node:22-alpine AS runtime
+FROM docker.io/node:24-alpine AS runtime
 WORKDIR /app
 COPY --from=build /app /app
 COPY /src /app/src
