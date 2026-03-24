@@ -40,7 +40,6 @@ services:
     volumes:
       - "./components/:/home/nonroot/components"
       - "./config/:/home/nonroot/config"
-      # - "../../app/:/app/app"
       - ./docker-compose.yaml:/home/nonroot/docker-compose.yaml
     networks:
       - dapr-net
