@@ -25,9 +25,31 @@ deps:
 			. "$$NVM_DIR/nvm.sh" && nvm install 22; \
 		fi; \
 	}
-	@command -v podman >/dev/null 2>&1 || echo "WARNING: podman is not installed. Install from https://podman.io/docs/installation"
-	@command -v dapr >/dev/null 2>&1 || echo "WARNING: dapr CLI is not installed. Install from https://docs.dapr.io/getting-started/install-dapr-cli/"
-	@command -v git >/dev/null 2>&1 || echo "WARNING: git is not installed. Install from https://git-scm.com/downloads"
+	@command -v podman >/dev/null 2>&1 || { echo "Installing Podman..."; \
+		if command -v apt-get >/dev/null 2>&1; then \
+			sudo apt-get update && sudo apt-get install -y podman; \
+		elif command -v dnf >/dev/null 2>&1; then \
+			sudo dnf install -y podman; \
+		elif command -v brew >/dev/null 2>&1; then \
+			brew install podman; \
+		else \
+			echo "ERROR: Could not install podman. Install manually from https://podman.io/docs/installation"; exit 1; \
+		fi; \
+	}
+	@command -v dapr >/dev/null 2>&1 || { echo "Installing Dapr CLI..."; \
+		curl -fsSL https://raw.githubusercontent.com/dapr/cli/master/install/install.sh | /bin/bash; \
+	}
+	@command -v git >/dev/null 2>&1 || { echo "Installing git..."; \
+		if command -v apt-get >/dev/null 2>&1; then \
+			sudo apt-get update && sudo apt-get install -y git; \
+		elif command -v dnf >/dev/null 2>&1; then \
+			sudo dnf install -y git; \
+		elif command -v brew >/dev/null 2>&1; then \
+			brew install git; \
+		else \
+			echo "ERROR: Could not install git. Install manually from https://git-scm.com/downloads"; exit 1; \
+		fi; \
+	}
 	@echo "All dependencies checked."
 
 #install: @ Install npm dependencies
