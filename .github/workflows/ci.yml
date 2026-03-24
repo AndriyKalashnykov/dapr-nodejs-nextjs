@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
 
 jobs:
   # ── Shared SDK ────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ jobs:
       - name: Install Dapr CLI
         uses: dapr/setup-dapr@v2
         with:
-          version: '1.15.0'
+          version: '1.17.0'
 
       - name: Initialize Dapr (slim – no Docker needed)
         run: dapr init --slim
