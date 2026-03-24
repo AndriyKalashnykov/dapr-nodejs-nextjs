@@ -30,7 +30,7 @@ module.exports = class extends Generator {
           "Bruno/Todo/Update Todo.bru",
           "Bruno/bruno.json",
           "infra/azure/main.tf",
-          "package.json",
+          ["package.json.ejs", "package.json"],
           "docker-compose.debug.yaml",
           "docker-compose.yaml",
           "Dockerfile.dev",
@@ -52,9 +52,10 @@ module.exports = class extends Generator {
         };
 
         for (const f of files) {
+          const [src, dest] = Array.isArray(f) ? f : [f, f];
           this.fs.copyTpl(
-            this.templatePath(f),
-            `${destAppDir}/${f}`,
+            this.templatePath(src),
+            `${destAppDir}/${dest}`,
             opts,
             copyOpts
           );
