@@ -200,5 +200,20 @@ Each CI job calls a dedicated Makefile target (`make sdk-ci`, `make backend-lint
 | `VITE_API_GATEWAY_BASE_URL` | web-react | — | Backend API URL |
 | `NODE_ENV` | all | `development` | `test` appends `_test` to DB schema |
 
+## Workflow Rules
+
+### Before Every Commit
+Always run the local CI pipeline before committing and pushing:
+```bash
+make ci                # lint + test + build across all workspaces
+```
+After pushing, watch the remote CI run to confirm it passes:
+```bash
+gh run watch           # watch the latest CI run
+```
+
+### Keep Documentation Up to Date
+After any code or configuration change, review and update the project's `*.md` files if affected. This includes `README.md`, `CLAUDE.md`, service READMEs, and docs in `docs/`. Version numbers, command references, architecture descriptions, and environment variable tables must stay in sync with the code.
+
 ## Adding a New Service
 See `docs/create-new-service.md` and use the scaffolds in `scaffolds/` directory. Each service needs: app container + Dapr sidecar container in its `docker-compose.yaml`.
