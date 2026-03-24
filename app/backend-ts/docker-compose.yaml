@@ -10,7 +10,8 @@ services:
     build:
       dockerfile: ./Dockerfile.dev
     ports:
-      - '3500:3500'
+      - '3001:3001' # Backend direct (Swagger UI at http://localhost:3001/docs)
+      - '3500:3500' # Dapr sidecar
     command: npm run dev -w app/backend-ts
     environment:
       SERVICE_NAME: backend-ts

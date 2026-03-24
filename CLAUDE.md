@@ -120,14 +120,14 @@ scaffolds/        Code generators for new services
 |---|---|---|
 | Next.js frontend | 3000 | `http://localhost:3000` |
 | React frontend | 3100 | `http://localhost:3100` |
-| Backend (via Dapr sidecar) | 3500 | `curl http://localhost:3500/v1.0/invoke/backend-ts/method/...` |
+| Swagger UI | 3001 | `http://localhost:3001/docs` |
+| Backend API (direct) | 3001 | `http://localhost:3001/api/v1/todos` |
+| Backend API (via Dapr) | 3500 | `http://localhost:3500/v1.0/invoke/backend-ts/method/...` |
 | PostgreSQL | 5432 | |
 | Redis | 6379 | |
 | Zipkin | 9411 | `http://localhost:9411` |
 | Dapr Dashboard | 8888 | `http://localhost:8888` |
 | Grafana OTEL (if enabled) | 3200 | `http://localhost:3200` |
-
-> **Note:** Swagger UI (`/docs`) HTML has relative asset paths that don't resolve through Dapr invoke in a browser. Use `curl` to fetch the OpenAPI spec at `/public/openapi.yaml` and import into Swagger Editor or Postman.
 
 ### Dapr Sidecar Pattern
 Every backend service runs as two containers: the app + a Dapr sidecar. The sidecar proxies all inter-service communication:
