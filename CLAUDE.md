@@ -205,17 +205,15 @@ Each CI job calls a dedicated Makefile target (`make sdk-ci`, `make backend-lint
 ## Workflow Rules
 
 ### Before Every Commit
-Always verify locally before committing and pushing:
+Always verify locally before committing and pushing. All Makefile targets must pass:
 ```bash
 make compile           # compile SDK + backend TypeScript
 make lint              # lint + typecheck + prettier across all workspaces
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (lint + test + build)
-```
-After code or configuration changes, start the full stack and validate all services:
-```bash
 make build             # rebuild service containers
 make up -d             # start the stack (detached)
+make test-integration  # integration tests (requires running stack)
 ```
 Verify all URLs from the README "Start, test, stop" section are reachable and return expected results:
 - `http://localhost:3000` — Next.js frontend loads HTML
