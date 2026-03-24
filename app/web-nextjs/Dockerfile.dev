@@ -2,7 +2,7 @@
 FROM docker.io/node:24-alpine AS build
 ENV NODE_ENV=development
 WORKDIR /app
-COPY package.json next.config.ts postcss.config.mjs tsconfig.json eslint.config.mjs .
+COPY package.json .npmrc next.config.ts postcss.config.mjs tsconfig.json eslint.config.mjs .
 RUN npm install
 WORKDIR /app/public
 COPY public .

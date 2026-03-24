@@ -3,7 +3,7 @@
 FROM docker.io/node:24-alpine AS build
 ENV NODE_ENV=production
 WORKDIR /app
-COPY package.json .
+COPY package.json .npmrc .
 RUN npm ci
 
 # Run

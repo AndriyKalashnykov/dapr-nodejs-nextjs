@@ -2,7 +2,7 @@
 FROM microservice-sdk-build AS build
 ENV NODE_ENV=development
 WORKDIR /workspace/app/backend-ts
-COPY package.json tsconfig.json .
+COPY package.json .npmrc tsconfig.json .
 RUN npm install
 
 # Run
