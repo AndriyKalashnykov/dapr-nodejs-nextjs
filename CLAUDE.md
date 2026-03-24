@@ -203,9 +203,12 @@ Each CI job calls a dedicated Makefile target (`make sdk-ci`, `make backend-lint
 ## Workflow Rules
 
 ### Before Every Commit
-Always run the local CI pipeline before committing and pushing:
+Always verify locally before committing and pushing:
 ```bash
-make ci                # lint + test + build across all workspaces
+make compile           # compile SDK + backend TypeScript
+make lint              # lint + typecheck + prettier across all workspaces
+make test              # unit tests with coverage (SDK + backend)
+make ci                # full local CI pipeline (lint + test + build)
 ```
 After pushing, watch the remote CI run to confirm it passes:
 ```bash
