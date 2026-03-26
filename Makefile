@@ -1,7 +1,22 @@
 .DEFAULT_GOAL := help
 
+# ── Pinned tool versions ────────────────────────────────────────────────────
+NVM_VERSION  := v0.40.3
+NODE_VERSION := 22
+
+# ── Project constants ───────────────────────────────────────────────────────
 COMPOSE_PROJECT := demo-ts
 NETWORK := $(COMPOSE_PROJECT)_dapr-net
+
+# ── Phony targets ──────────────────────────────────────────────────────────
+.PHONY: help deps install clean setup build compile \
+        up up-db up-dapr up-otel up-infra down down-otel \
+        run debug terminal lint test test-integration \
+        sdk-ci backend-lint backend-test backend-test-integration \
+        web-nextjs-ci web-react-ci \
+        psql migrate redis-cli shell logs \
+        prune login update upgrade \
+        ci check-version release
 
 #help: @ List available tasks
 help:
@@ -17,12 +32,12 @@ deps:
 	@echo "Checking dependencies..."
 	@command -v node >/dev/null 2>&1 || { echo "Installing Node.js via nvm..."; \
 		if [ -s "$$HOME/.nvm/nvm.sh" ]; then \
-			. "$$HOME/.nvm/nvm.sh" && nvm install 22; \
+			. "$$HOME/.nvm/nvm.sh" && nvm install $(NODE_VERSION); \
 		else \
 			echo "Installing nvm..."; \
-			curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash; \
+			curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/$(NVM_VERSION)/install.sh | bash; \
 			export NVM_DIR="$$HOME/.nvm"; \
-			. "$$NVM_DIR/nvm.sh" && nvm install 22; \
+			. "$$NVM_DIR/nvm.sh" && nvm install $(NODE_VERSION); \
 		fi; \
 	}
 	@command -v podman >/dev/null 2>&1 || { echo "Installing Podman..."; \
@@ -87,6 +102,9 @@ compile: install
 up:
 	@echo "\n***Bringing up the stack***\n"
 	@podman compose up
+
+#run: @ Alias for 'up' – bring up the full stack
+run: up
 
 #up-db: @ Bring up PostgreSQL only
 up-db:
@@ -236,12 +254,13 @@ ci: install
 	@npm run lint -w app/web-react
 	@npm run build -w app/web-react
 
-#check-version: @ Ensure VERSION variable is set
+#check-version: @ Ensure VERSION variable is set and follows semver (vX.Y.Z)
 check-version:
 ifndef VERSION
 	$(error VERSION is undefined. Usage: make release VERSION=v1.0.0)
 endif
-	@echo -n ""
+	@echo "$(VERSION)" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$' \
+		|| { echo "ERROR: VERSION must match semver format vX.Y.Z (got: $(VERSION))"; exit 1; }
 
 #release: @ Create and push a release tag (requires VERSION=vX.Y.Z)
 release: check-version

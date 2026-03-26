@@ -6,6 +6,9 @@ on:
     tags: ['v*']
   pull_request:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -19,9 +22,9 @@ jobs:
     name: SDK – compile, lint & test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -29,7 +32,7 @@ jobs:
       - name: Compile, lint & test
         run: make sdk-ci
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v7
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -41,14 +44,14 @@ jobs:
     needs: sdk
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@d3f86a106a0bac45b974e5d18412c681246f4ce3 # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -61,14 +64,14 @@ jobs:
     needs: sdk
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@d3f86a106a0bac45b974e5d18412c681246f4ce3 # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -96,14 +99,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@d3f86a106a0bac45b974e5d18412c681246f4ce3 # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -185,9 +188,9 @@ jobs:
     name: Web (Next.js) – lint & build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -199,9 +202,9 @@ jobs:
     name: Web (React) – lint & build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
