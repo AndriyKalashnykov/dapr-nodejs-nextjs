@@ -51,7 +51,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974e5d18412c681246f4ce3 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -71,7 +71,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974e5d18412c681246f4ce3 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -106,7 +106,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974e5d18412c681246f4ce3 # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
