@@ -56,6 +56,7 @@ SERVICE=backend-ts make logs     # Tail logs for a service
 make clean          # Remove build artifacts and node_modules
 make prune          # Remove unused Podman containers/images/volumes
 make release VERSION=v1.0.0  # Tag and push a release
+make renovate-validate      # Validate Renovate configuration
 ```
 
 ### Backend (`app/backend-ts`)
@@ -211,6 +212,7 @@ make compile           # compile SDK + backend TypeScript
 make lint              # lint + typecheck + prettier across all workspaces
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (lint + test + build)
+make ci-run            # run GitHub Actions workflow locally via act
 make build             # rebuild service containers
 make up -d             # start the stack (detached)
 make test-integration  # integration tests (requires running stack)

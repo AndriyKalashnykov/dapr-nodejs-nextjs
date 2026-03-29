@@ -1,8 +1,9 @@
 .DEFAULT_GOAL := help
 
 # ── Pinned tool versions ────────────────────────────────────────────────────
-NVM_VERSION  := v0.40.3
+NVM_VERSION  := 0.40.4
 NODE_VERSION := 22
+ACT_VERSION  := 0.2.86
 
 # ── Project constants ───────────────────────────────────────────────────────
 COMPOSE_PROJECT := demo-ts
@@ -16,7 +17,8 @@ NETWORK := $(COMPOSE_PROJECT)_dapr-net
         web-nextjs-ci web-react-ci \
         psql migrate redis-cli shell logs \
         prune login update upgrade \
-        ci check-version release
+        ci ci-run check-version release \
+        deps-act renovate-validate
 
 #help: @ List available tasks
 help:
@@ -35,7 +37,7 @@ deps:
 			. "$$HOME/.nvm/nvm.sh" && nvm install $(NODE_VERSION); \
 		else \
 			echo "Installing nvm..."; \
-			curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/$(NVM_VERSION)/install.sh | bash; \
+			curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v$(NVM_VERSION)/install.sh | bash; \
 			export NVM_DIR="$$HOME/.nvm"; \
 			. "$$NVM_DIR/nvm.sh" && nvm install $(NODE_VERSION); \
 		fi; \
@@ -270,3 +272,22 @@ release: check-version
 	@git push origin ${VERSION}
 	@git push
 	@echo "Done."
+
+# ── Local CI with act ───────────────────────────────────────────────────────
+
+#deps-act: @ Install act for local GitHub Actions testing
+deps-act: deps
+	@command -v act >/dev/null 2>&1 || { echo "Installing act $(ACT_VERSION)..."; \
+		curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash -s -- -b /usr/local/bin v$(ACT_VERSION); \
+	}
+
+#ci-run: @ Run GitHub Actions workflow locally using act
+ci-run: deps-act
+	@act push --container-architecture linux/amd64 \
+		--artifact-server-path /tmp/act-artifacts
+
+# ── Renovate ────────────────────────────────────────────────────────────────
+
+#renovate-validate: @ Validate Renovate configuration
+renovate-validate:
+	@npx --yes renovate --platform=local

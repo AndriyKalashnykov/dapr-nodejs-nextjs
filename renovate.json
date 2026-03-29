@@ -7,7 +7,9 @@
   "commitMessagePrefix": "chore(all): ",
   "commitMessageAction": "update",
   "commitBody": "Signed-off-by: Renovate Bot <bot@renovateapp.com>",
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "prConcurrentLimit": 50,
   "prHourlyLimit": 0,
   "platformAutomerge": true,
@@ -16,7 +18,9 @@
   "automergeStrategy": "squash",
   "ignoreTests": false,
   "vulnerabilityAlerts": {
-    "labels": ["security"],
+    "labels": [
+      "security"
+    ],
     "automerge": true,
     "minimumReleaseAge": "0 days"
   },
@@ -30,66 +34,106 @@
   "packageRules": [
     {
       "description": "Wait 3 days before automerging major updates",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "minimumReleaseAge": "3 days"
     },
     {
       "description": "Group GitHub Actions into one PR",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "GitHub Actions"
     },
     {
       "description": "Group devDependencies non-major updates",
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "dev-dependencies",
       "automerge": true
     },
     {
       "description": "Group type definitions",
-      "matchPackageNames": ["/^@types\\//"],
+      "matchPackageNames": [
+        "/^@types\\//"
+      ],
       "groupName": "type-definitions",
       "automerge": true
     },
     {
       "description": "Group all Next.js related packages",
-      "matchPackageNames": ["next", "eslint-config-next"],
+      "matchPackageNames": [
+        "next",
+        "eslint-config-next"
+      ],
       "groupName": "Next.js"
     },
     {
       "description": "Group all React packages",
-      "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ],
       "groupName": "React"
     },
     {
       "description": "Group Dapr SDK updates",
-      "matchPackageNames": ["@dapr/dapr"],
+      "matchPackageNames": [
+        "@dapr/dapr"
+      ],
       "groupName": "Dapr SDK"
     },
     {
       "description": "Group OpenTelemetry packages",
-      "matchPackageNames": ["@opentelemetry/**"],
+      "matchPackageNames": [
+        "/^@opentelemetry\\//"
+      ],
       "groupName": "OpenTelemetry"
     },
     {
       "description": "Group Knex and database packages",
-      "matchPackageNames": ["knex", "pg", "@types/pg"],
+      "matchPackageNames": [
+        "knex",
+        "pg",
+        "@types/pg"
+      ],
       "groupName": "Database"
     },
     {
       "description": "Group Vite packages",
-      "matchPackageNames": ["vite", "@vitejs/**"],
+      "matchPackageNames": [
+        "vite",
+        "/^@vitejs\\//"
+      ],
       "groupName": "Vite"
     },
     {
       "description": "Group Docker base images",
-      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchManagers": [
+        "dockerfile",
+        "docker-compose"
+      ],
       "groupName": "Docker base images"
     },
     {
       "description": "Group Node.js version updates",
-      "matchPackageNames": ["node"],
-      "matchManagers": ["dockerfile", "docker-compose", "nvm", "nodenv"],
+      "matchPackageNames": [
+        "node"
+      ],
+      "matchManagers": [
+        "dockerfile",
+        "docker-compose",
+        "nvm",
+        "nodenv"
+      ],
       "groupName": "Node.js"
     }
   ]

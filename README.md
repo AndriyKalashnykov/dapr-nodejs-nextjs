@@ -1,4 +1,4 @@
-[![ci](https://github.com/AndriyKalashnykov/dapr-nodejs-nextjs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AndriyKalashnykov/dapr-nodejs-nextjs/actions/workflows/ci.yml)
+[![CI](https://github.com/AndriyKalashnykov/dapr-nodejs-nextjs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AndriyKalashnykov/dapr-nodejs-nextjs/actions/workflows/ci.yml)
 [![Hits](https://hits.sh/github.com/AndriyKalashnykov/dapr-nodejs-nextjs.svg?view=today-total&style=plastic)](https://hits.sh/github.com/AndriyKalashnykov/dapr-nodejs-nextjs/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://app.renovatebot.com/dashboard#github/AndriyKalashnykov/dapr-nodejs-nextjs)
@@ -9,13 +9,20 @@ A reference implementation for building microservices with Node.js, TypeScript, 
 
 ## Prerequisites
 
-- [Node.js 24+](https://nodejs.org/)
-- [Podman 4.9+](https://podman.io/docs/installation) with Compose (Docker-compatible)
-- [Dapr CLI 1.17+](https://docs.dapr.io/getting-started/install-dapr-cli/)
-- [PostgreSQL 18+](https://www.postgresql.org/) (runs in container)
-- [Next.js 16+](https://nextjs.org/) (installed via npm)
+| Tool | Version | Purpose |
+|------|---------|---------|
+| [GNU Make](https://www.gnu.org/software/make/) | 3.81+ | Build orchestration |
+| [Node.js](https://nodejs.org/) | 24+ | JavaScript runtime |
+| [Podman](https://podman.io/docs/installation) | 4.9+ | Container runtime (Docker-compatible) with Compose |
+| [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | 1.17+ | Distributed application runtime |
+| [PostgreSQL](https://www.postgresql.org/) | 18+ | Database (runs in container) |
+| [Git](https://git-scm.com/) | latest | Version control |
 
-Run `make deps` to check and auto-install missing dependencies.
+Install all required dependencies:
+
+```bash
+make deps
+```
 
 
 **Linux setup:**
@@ -105,6 +112,7 @@ Run `make help` to see all targets. Key commands:
 | `make test` | Unit tests with coverage |
 | `make test-integration` | Integration tests (needs running DB + Dapr) |
 | `make ci` | Full CI pipeline locally |
+| `make ci-run` | Run GitHub Actions workflow locally via [act](https://github.com/nektos/act) |
 | `make migrate` | Run DB migrations in running backend container |
 | **Per-service** | |
 | `SERVICE=backend-ts make debug` | Start service with Node inspector on :9229 |
@@ -115,6 +123,7 @@ Run `make help` to see all targets. Key commands:
 | `make redis-cli` | Connect to Redis CLI |
 | **Release** | |
 | `make release VERSION=v1.0.0` | Tag and push a release |
+| `make renovate-validate` | Validate Renovate configuration |
 
 ## Database migrations
 
