@@ -18,15 +18,15 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.9",
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "4.2.2",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^24.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@next/eslint-plugin-next": "16.2.1",
-    "eslint": "^10.0.0",
-    "typescript-eslint": "^8.31.0",
-    "tailwindcss": "^4",
-    "typescript": "^6.0.0"
+    "eslint": "10.1.0",
+    "typescript-eslint": "8.57.2",
+    "tailwindcss": "4.2.2",
+    "typescript": "6.0.2"
   }
 }

@@ -44,20 +44,20 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.0",
+    "@eslint/js": "10.0.1",
     "@types/express": "^5.0.1",
     "@types/http-errors": "^2.0.0",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^24.0.0",
-    "@vitest/coverage-v8": "^4.0.0",
-    "eslint": "^10.0.0",
-    "eslint-config-prettier": "^10.1.2",
-    "globals": "^17.0.0",
+    "@vitest/coverage-v8": "4.1.2",
+    "eslint": "10.1.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.4.0",
     "prettier": "3.8.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^6.0.0",
-    "typescript-eslint": "^8.31.0",
-    "vite-tsconfig-paths": "^6.0.0",
-    "vitest": "^4.0.0"
+    "ts-node": "10.9.2",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.57.2",
+    "vite-tsconfig-paths": "6.1.1",
+    "vitest": "4.1.2"
   }
 }
