@@ -3,7 +3,7 @@ name: demo-ts
 services:
   # Grafana OTEL collector, metrics, traces and logs. TODO: update dapr/config.yaml to wire this up
   grafana-otel:
-    image: "docker.io/grafana/otel-lgtm"
+    image: "docker.io/grafana/otel-lgtm@sha256:52a197a4aad6203af126c148c6194472b48f88d5481f246f5d3657023b30ac9f"
     ports:
       - "3200:3000"
       - "4318:4318"

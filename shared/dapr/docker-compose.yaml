@@ -3,7 +3,7 @@ name: demo-ts
 services:
   # Dapr placement service
   placement:
-    image: "docker.io/daprio/dapr"
+    image: "docker.io/daprio/dapr@sha256:b0a7b27b928906230acd2b061306a8f4aa09ee36a27beb5627ab3f05514d7da4"
     command: ["./placement", "-port", "50005"]
     ports:
       - "50005:50005"
@@ -11,7 +11,7 @@ services:
       - dapr-net
   # Dapr state and pubsub provider
   redis:
-    image: "docker.io/redis:8-alpine"
+    image: "docker.io/redis:8-alpine@sha256:81b6f81d6a6c5b9019231a2e8eb10085e3a139a34f833dcc965a8a959b040b72"
     restart: always
     ports:
       - "6379:6379"
@@ -20,7 +20,7 @@ services:
       - dapr-net
   # Dapr metrics provider
   zipkin:
-    image: "docker.io/openzipkin/zipkin"
+    image: "docker.io/openzipkin/zipkin@sha256:ebfd47b93879b4bec4075ea3a4b07744c5476bae8dca3f6f9c2aca798ceaf0cc"
     ports:
       - "9411:9411"
     # TODO: Not working on Azure VM, causes service to crash
@@ -30,7 +30,7 @@ services:
       - dapr-net
   # Dapr dashboard
   dapr-dashboard:
-    image: "docker.io/daprio/dashboard:latest"
+    image: "docker.io/daprio/dashboard:latest@sha256:4be696707bd1349b49875f8e6da0d27dad742834483740d5a7897a73abeaf83d"
     command: [ "--docker-compose=true",
       "--components-path=/home/nonroot/components",
       "--config-path=/home/nonroot/config",
