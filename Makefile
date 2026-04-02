@@ -3,7 +3,7 @@
 # ── Pinned tool versions ────────────────────────────────────────────────────
 NVM_VERSION  := 0.40.4
 NODE_VERSION := 22
-ACT_VERSION  := 0.2.86
+ACT_VERSION  := 0.2.87
 
 # ── Project constants ───────────────────────────────────────────────────────
 COMPOSE_PROJECT := demo-ts
