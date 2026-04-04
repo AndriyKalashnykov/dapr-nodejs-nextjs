@@ -2,7 +2,7 @@
 
 # ── Pinned tool versions ────────────────────────────────────────────────────
 NVM_VERSION  := 0.40.4
-NODE_VERSION := 22
+NODE_VERSION := 24
 ACT_VERSION  := 0.2.87
 
 # ── Project constants ───────────────────────────────────────────────────────
