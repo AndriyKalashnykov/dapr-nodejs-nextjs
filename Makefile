@@ -1,31 +1,27 @@
 .DEFAULT_GOAL := help
 
+APP_NAME       := dapr-nodejs-nextjs
+CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+
 # ── Pinned tool versions ────────────────────────────────────────────────────
-NVM_VERSION  := 0.40.4
-NODE_VERSION := 24
-ACT_VERSION  := 0.2.87
+NVM_VERSION      := 0.40.4
+NODE_VERSION     := 24
+ACT_VERSION      := 0.2.87
+DAPR_VERSION     := 1.17.0
+HADOLINT_VERSION := 2.14.0
 
 # ── Project constants ───────────────────────────────────────────────────────
-COMPOSE_PROJECT := demo-ts
-NETWORK := $(COMPOSE_PROJECT)_dapr-net
-
-# ── Phony targets ──────────────────────────────────────────────────────────
-.PHONY: help deps install clean setup build compile \
-        up up-db up-dapr up-otel up-infra down down-otel \
-        run debug terminal lint test test-integration \
-        sdk-ci backend-lint backend-test backend-test-integration \
-        web-nextjs-ci web-react-ci \
-        psql migrate redis-cli shell logs \
-        prune login update upgrade \
-        ci ci-run check-version release \
-        deps-act renovate-validate
+COMPOSE_PROJECT  := demo-ts
+NETWORK          := $(COMPOSE_PROJECT)_dapr-net
+ALPINE_IMAGE     := alpine:3.21
+POSTGRES_IMAGE   := postgres:18-alpine
+REDIS_IMAGE      := redis:7-alpine
 
 #help: @ List available tasks
 help:
-	@clear
 	@echo "Usage: make COMMAND"
 	@echo "Commands :"
-	@grep -E '[a-zA-Z\.\-]+:.*?@ .*$$' $(MAKEFILE_LIST)| tr -d '#' | awk 'BEGIN {FS = ":.*?@ "}; {printf "\033[32m%-20s\033[0m - %s\n", $$1, $$2}'
+	@grep -E '[a-zA-Z\.\-]+:.*?@ .*$$' $(MAKEFILE_LIST)| tr -d '#' | awk 'BEGIN {FS = ":.*?@ "}; {printf "\033[32m%-28s\033[0m - %s\n", $$1, $$2}'
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 
@@ -53,8 +49,8 @@ deps:
 			echo "ERROR: Could not install podman. Install manually from https://podman.io/docs/installation"; exit 1; \
 		fi; \
 	}
-	@command -v dapr >/dev/null 2>&1 || { echo "Installing Dapr CLI..."; \
-		curl -fsSL https://raw.githubusercontent.com/dapr/cli/master/install/install.sh | /bin/bash; \
+	@command -v dapr >/dev/null 2>&1 || { echo "Installing Dapr CLI $(DAPR_VERSION)..."; \
+		curl -fsSL https://raw.githubusercontent.com/dapr/cli/v$(DAPR_VERSION)/install/install.sh | /bin/bash -s $(DAPR_VERSION); \
 	}
 	@command -v git >/dev/null 2>&1 || { echo "Installing git..."; \
 		if command -v apt-get >/dev/null 2>&1; then \
@@ -68,6 +64,30 @@ deps:
 		fi; \
 	}
 	@echo "All dependencies checked."
+
+#deps-act: @ Install act for local GitHub Actions testing
+deps-act: deps
+	@command -v act >/dev/null 2>&1 || { echo "Installing act $(ACT_VERSION)..."; \
+		curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash -s -- -b /usr/local/bin v$(ACT_VERSION); \
+	}
+
+#deps-hadolint: @ Install hadolint for Dockerfile linting
+deps-hadolint:
+	@command -v hadolint >/dev/null 2>&1 || { echo "Installing hadolint $(HADOLINT_VERSION)..."; \
+		sudo curl -sSfL -o /usr/local/bin/hadolint \
+			"https://github.com/hadolint/hadolint/releases/download/v$(HADOLINT_VERSION)/hadolint-Linux-x86_64"; \
+		sudo chmod +x /usr/local/bin/hadolint; \
+	}
+
+#deps-check: @ Print installed tool versions
+deps-check:
+	@echo "node:    $$(node --version 2>/dev/null || echo 'not installed')"
+	@echo "npm:     $$(npm --version 2>/dev/null || echo 'not installed')"
+	@echo "podman:  $$(podman --version 2>/dev/null || echo 'not installed')"
+	@echo "dapr:    $$(dapr version --output json 2>/dev/null | grep -o '"Cli version":"[^"]*"' || echo 'not installed')"
+	@echo "git:     $$(git --version 2>/dev/null || echo 'not installed')"
+	@echo "act:     $$(act --version 2>/dev/null || echo 'not installed')"
+	@echo "hadolint: $$(hadolint --version 2>/dev/null || echo 'not installed')"
 
 #install: @ Install npm dependencies
 install: deps
@@ -84,13 +104,13 @@ clean:
 # ── Build ─────────────────────────────────────────────────────────────────────
 
 #setup: @ Build base Docker images (run once after clone)
-setup:
+setup: deps
 	@echo "\n***Building microservice base image***\n"
 	@podman build ./shared/microservice -t microservice-build --build-arg ADD_CERT=$$ADD_CERT
 	@podman build -f Dockerfile.dev -t microservice-sdk-build .
 
 #build: @ Build all service containers in parallel
-build:
+build: deps
 	@podman compose --parallel 3 build
 
 #compile: @ Compile SDK and backend TypeScript
@@ -148,12 +168,21 @@ terminal:
 	@if [ -z "$$SERVICE" ]; then echo "ERROR: SERVICE is required. Usage: SERVICE=backend-ts make terminal"; exit 1; fi
 	@podman compose exec -it $$SERVICE /bin/sh
 
+#format: @ Auto-format code with Prettier across all workspaces
+format: install
+	@npx prettier --write .
+
 #lint: @ Run lint and typecheck across all workspaces
-lint: install
+lint: install deps-hadolint
 	@npm run ci -w packages/@sos/sdk
 	@npm run ci -w app/backend-ts
 	@npm run lint -w app/web-nextjs
 	@npm run lint -w app/web-react
+	@find . -name 'Dockerfile*' -not -path '*/node_modules/*' -not -path '*/.next/*' | xargs hadolint
+
+#vulncheck: @ Run npm audit for known vulnerabilities
+vulncheck: install
+	@npm audit --audit-level=moderate || true
 
 #test: @ Run unit tests across SDK and backend
 test: install
@@ -200,7 +229,7 @@ web-react-ci: install
 #psql: @ Connect to PostgreSQL CLI (default password: postgres)
 psql:
 	@echo "\n***Default user 'postgres' has default password 'postgres'***\n"
-	@podman run -it --rm --network $(NETWORK) postgres:17-alpine psql -h postgres -U postgres
+	@podman run -it --rm --network $(NETWORK) $(POSTGRES_IMAGE) psql -h postgres -U postgres
 
 #migrate: @ Run pending database migrations in running backend-ts container
 migrate:
@@ -210,11 +239,11 @@ migrate:
 
 #redis-cli: @ Connect to Redis CLI
 redis-cli:
-	@podman run -it --rm --network $(NETWORK) redis:7-alpine redis-cli -h redis
+	@podman run -it --rm --network $(NETWORK) $(REDIS_IMAGE) redis-cli -h redis
 
 #shell: @ Open an alpine shell on the dapr-net network (for nc, ping, etc.)
 shell:
-	@podman run -it --rm --network $(NETWORK) alpine:latest
+	@podman run -it --rm --network $(NETWORK) $(ALPINE_IMAGE)
 
 #logs: @ Tail logs for a specific service (SERVICE=backend-ts make logs)
 logs:
@@ -243,18 +272,9 @@ upgrade: deps
 
 # ── CI / Release ─────────────────────────────────────────────────────────────
 
-#ci: @ Run full CI pipeline locally (lint + typecheck + unit tests)
-ci: install
-	@echo "\n***Running CI pipeline***\n"
-	@npm run compile -w packages/@sos/sdk
-	@npm run ci -w packages/@sos/sdk
-	@npm run test:cov -w packages/@sos/sdk
-	@npm run ci -w app/backend-ts
-	@npm run test:cov -w app/backend-ts
-	@npm run lint -w app/web-nextjs
-	@JWT_SECRET_KEY=ci-build-placeholder npm run build -w app/web-nextjs
-	@npm run lint -w app/web-react
-	@npm run build -w app/web-react
+#ci: @ Run full CI pipeline locally (lint + vulncheck + test + build)
+ci: lint vulncheck test build
+	@echo "\n***CI pipeline passed.***\n"
 
 #check-version: @ Ensure VERSION variable is set and follows semver (vX.Y.Z)
 check-version:
@@ -275,12 +295,6 @@ release: check-version
 
 # ── Local CI with act ───────────────────────────────────────────────────────
 
-#deps-act: @ Install act for local GitHub Actions testing
-deps-act: deps
-	@command -v act >/dev/null 2>&1 || { echo "Installing act $(ACT_VERSION)..."; \
-		curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash -s -- -b /usr/local/bin v$(ACT_VERSION); \
-	}
-
 #ci-run: @ Run GitHub Actions workflow locally using act
 ci-run: deps-act
 	@act push --container-architecture linux/amd64 \
@@ -289,5 +303,20 @@ ci-run: deps-act
 # ── Renovate ────────────────────────────────────────────────────────────────
 
 #renovate-validate: @ Validate Renovate configuration
-renovate-validate:
-	@npx --yes renovate --platform=local
+renovate-validate: deps
+	@if [ -n "$$GH_ACCESS_TOKEN" ]; then \
+		GITHUB_COM_TOKEN=$$GH_ACCESS_TOKEN npx --yes renovate --platform=local; \
+	else \
+		echo "Warning: GH_ACCESS_TOKEN not set, some dependency lookups may fail"; \
+		npx --yes renovate --platform=local; \
+	fi
+
+.PHONY: help deps deps-act deps-hadolint deps-check install clean \
+        setup build compile \
+        up run up-db up-dapr up-otel up-infra down down-otel \
+        debug terminal format lint vulncheck test test-integration \
+        sdk-ci backend-lint backend-test backend-test-integration \
+        web-nextjs-ci web-react-ci \
+        psql migrate redis-cli shell logs \
+        prune login update upgrade \
+        ci check-version release ci-run renovate-validate

@@ -5,6 +5,7 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -21,6 +22,7 @@ jobs:
   sdk:
     name: SDK – compile, lint & test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -28,11 +30,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Compile, lint & test
         run: make sdk-ci
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        continue-on-error: true
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -43,6 +47,7 @@ jobs:
     name: Backend – lint & typecheck
     needs: sdk
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -50,6 +55,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: '**/package-lock.json'
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -61,8 +67,9 @@ jobs:
 
   backend-unit:
     name: Backend – unit tests
-    needs: sdk
+    needs: [sdk, backend-ci]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -70,6 +77,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: '**/package-lock.json'
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -83,8 +91,9 @@ jobs:
 
   backend-integration:
     name: Backend – integration tests
-    needs: sdk
+    needs: [sdk, backend-ci]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:18-alpine@sha256:4da1a4828be12604092fa55311276f08f9224a74a62dcb4708bd7439e2a03911
@@ -105,6 +114,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: '**/package-lock.json'
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -187,6 +197,7 @@ jobs:
   web-nextjs:
     name: Web (Next.js) – lint & build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -194,6 +205,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Lint & build
         run: make web-nextjs-ci
@@ -201,6 +213,7 @@ jobs:
   web-react:
     name: Web (React) – lint & build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -208,6 +221,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Lint & build
         run: make web-react-ci
@@ -218,6 +232,7 @@ jobs:
     if: always()
     needs: [sdk, backend-ci, backend-unit, backend-integration, web-nextjs, web-react]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check results
         run: |

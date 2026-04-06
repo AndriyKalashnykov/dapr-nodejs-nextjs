@@ -7,16 +7,23 @@
 
 A reference implementation for building microservices with Node.js, TypeScript, and [Dapr](https://dapr.io/). The project ships a todo-list API backend (Express 5), two frontends (Next.js SSR and React SPA), and a shared SDK — all wired together through Dapr sidecars for state management (Redis), pub/sub messaging, and service-to-service invocation. The monorepo uses npm workspaces, containerized with [Podman](https://podman.io/) (Docker-compatible), and includes PostgreSQL for persistence, OpenTelemetry for observability, and Knex.js for database migrations.
 
+## Quick Start
+
+```bash
+make deps && make install && make setup   # install tools, npm packages, base images
+make build                                # build service containers
+make up                                   # start the full stack (Ctrl-C to stop)
+```
+
 ## Prerequisites
 
 | Tool | Version | Purpose |
 |------|---------|---------|
 | [GNU Make](https://www.gnu.org/software/make/) | 3.81+ | Build orchestration |
-| [Node.js](https://nodejs.org/) | 24+ | JavaScript runtime |
-| [Podman](https://podman.io/docs/installation) | 4.9+ | Container runtime (Docker-compatible) with Compose |
-| [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | 1.17+ | Distributed application runtime |
-| [PostgreSQL](https://www.postgresql.org/) | 18+ | Database (runs in container) |
 | [Git](https://git-scm.com/) | latest | Version control |
+| [Node.js](https://nodejs.org/) | 24+ (tracks `NODE_VERSION` in Makefile) | JavaScript runtime |
+| [Podman](https://podman.io/docs/installation) | 4.9+ | Container runtime (Docker-compatible) with Compose |
+| [Dapr CLI](https://docs.dapr.io/getting-started/install-dapr-cli/) | 1.17+ (tracks `DAPR_VERSION` in Makefile) | Distributed application runtime |
 
 Install all required dependencies:
 
@@ -24,38 +31,44 @@ Install all required dependencies:
 make deps
 ```
 
+<details>
+<summary>Linux: Podman setup</summary>
 
-**Linux setup:**
 ```bash
 sudo apt-get -y install podman docker-compose-plugin
 systemctl --user enable --now podman.socket
 export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/podman/podman.sock"
 ```
+</details>
 
-**Windows:** Install [Podman Desktop](https://podman-desktop.io/) and enable the "Compose" extension.
+<details>
+<summary>Windows: Podman setup</summary>
+
+Install [Podman Desktop](https://podman-desktop.io/) and enable the "Compose" extension.
+</details>
 
 ## Start, test, stop
 
 ```bash
 # First time only
-make deps           # Check dependencies
-make install        # Install npm packages
-make setup          # Build base Docker images
+make deps           # Check and install required dependencies (node, npm, podman, dapr, git)
+make install        # Install npm dependencies
+make setup          # Build base Docker images (run once after clone)
 
 # Start
-make build          # Build service containers
-make up             # Start the full stack (Ctrl-C to stop)
+make build          # Build all service containers in parallel
+make up             # Bring up the full stack (Ctrl-C to stop)
 
 # Test (no containers needed)
-make test           # Unit tests with coverage (SDK + backend)
-make lint           # Lint + typecheck all workspaces
-make ci             # Full CI pipeline (lint + test + build)
+make test           # Run unit tests across SDK and backend
+make lint           # Run lint and typecheck across all workspaces
+make ci             # Run full CI pipeline locally (lint + vulncheck + test + build)
 
 # Test (containers needed)
-make test-integration  # Integration tests (requires Postgres + Dapr)
+make test-integration  # Run backend integration tests (requires Postgres + Dapr sidecar)
 
 # Stop
-make down           # Tear down all containers
+make down           # Tear down the full stack
 ```
 
 Once running, services are available at:
@@ -89,40 +102,87 @@ curl -H "Authorization: Bearer $TOKEN" \
   http://localhost:3500/v1.0/invoke/backend-ts/method/api/v1/todos
 ```
 
-## Makefile reference
+## Available Make Targets
 
-Run `make help` to see all targets. Key commands:
+Run `make help` to see all targets.
 
-| Command | Description |
-|---|---|
-| **Setup** | |
-| `make deps` | Check/install dependencies (node, podman, dapr) |
-| `make install` | `npm ci` |
-| `make setup` | Build base Docker images (once after clone) |
-| `make build` | Build all service containers |
-| `make clean` | Remove node_modules and build artifacts |
-| **Stack** | |
-| `make up` | Start the full stack |
-| `make down` | Stop the full stack |
-| `make up-db` | Start PostgreSQL only |
-| `make up-dapr` | Start Dapr infra (Redis, Zipkin, placement, dashboard) |
-| **Development** | |
-| `make compile` | Compile SDK + backend TypeScript |
-| `make lint` | Lint + typecheck all workspaces |
-| `make test` | Unit tests with coverage |
-| `make test-integration` | Integration tests (needs running DB + Dapr) |
-| `make ci` | Full CI pipeline locally |
-| `make ci-run` | Run GitHub Actions workflow locally via [act](https://github.com/nektos/act) |
-| `make migrate` | Run DB migrations in running backend container |
-| **Per-service** | |
-| `SERVICE=backend-ts make debug` | Start service with Node inspector on :9229 |
-| `SERVICE=backend-ts make terminal` | Shell into running container |
-| `SERVICE=backend-ts make logs` | Tail service logs |
-| **Diagnostics** | |
-| `make psql` | Connect to PostgreSQL CLI |
+### Setup & Build
+
+| Target | Description |
+|--------|-------------|
+| `make help` | List available tasks |
+| `make deps` | Check and install required dependencies (node, npm, podman, dapr, git) |
+| `make deps-check` | Print installed tool versions |
+| `make install` | Install npm dependencies |
+| `make clean` | Remove build artifacts and node_modules |
+| `make setup` | Build base Docker images (run once after clone) |
+| `make build` | Build all service containers in parallel |
+| `make compile` | Compile SDK and backend TypeScript |
+
+### Stack Management
+
+| Target | Description |
+|--------|-------------|
+| `make up` | Bring up the full stack (Ctrl-C to stop) |
+| `make run` | Alias for 'up' – bring up the full stack |
+| `make down` | Tear down the full stack |
+| `make up-db` | Bring up PostgreSQL only |
+| `make up-dapr` | Bring up Dapr infrastructure (Redis, Zipkin, placement, dashboard) |
+| `make up-otel` | Bring up Grafana OpenTelemetry stack (detached) |
+| `make up-infra` | Bring up OpenTelemetry + database |
+| `make down-otel` | Tear down Grafana OpenTelemetry stack |
+
+### Development
+
+| Target | Description |
+|--------|-------------|
+| `make format` | Auto-format code with Prettier across all workspaces |
+| `make lint` | Run lint and typecheck across all workspaces |
+| `make vulncheck` | Run npm audit for known vulnerabilities |
+| `make test` | Run unit tests across SDK and backend |
+| `make test-integration` | Run backend integration tests (requires Postgres + Dapr sidecar) |
+| `make migrate` | Run pending database migrations in running backend-ts container |
+| `SERVICE=backend-ts make debug` | Start a service in debug mode (Node inspector on :9229) |
+| `SERVICE=backend-ts make terminal` | Open a shell in a running service container |
+| `SERVICE=backend-ts make logs` | Tail logs for a specific service |
+
+### Per-workspace CI
+
+| Target | Description |
+|--------|-------------|
+| `make sdk-ci` | SDK: compile, lint, and test |
+| `make backend-lint` | Backend: lint and typecheck |
+| `make backend-test` | Backend: unit tests with coverage |
+| `make backend-test-integration` | Backend: integration tests with coverage (requires Postgres + Dapr) |
+| `make web-nextjs-ci` | Next.js: lint and build |
+| `make web-react-ci` | React: lint and build |
+
+### Diagnostics
+
+| Target | Description |
+|--------|-------------|
+| `make psql` | Connect to PostgreSQL CLI (default password: postgres) |
 | `make redis-cli` | Connect to Redis CLI |
-| **Release** | |
-| `make release VERSION=v1.0.0` | Tag and push a release |
+| `make shell` | Open an alpine shell on the dapr-net network (for nc, ping, etc.) |
+
+### Maintenance
+
+| Target | Description |
+|--------|-------------|
+| `make prune` | Remove unused Podman containers, images, and volumes |
+| `make login` | Login to Docker Hub via Podman |
+| `make update` | Update npm dependencies to latest allowed versions |
+| `make upgrade` | Upgrade npm dependencies to latest versions (ignoring ranges) |
+
+### CI / Release
+
+| Target | Description |
+|--------|-------------|
+| `make ci` | Run full CI pipeline locally (lint + vulncheck + test + build) |
+| `make ci-run` | Run GitHub Actions workflow locally using [act](https://github.com/nektos/act) |
+| `make deps-act` | Install act for local GitHub Actions testing |
+| `make check-version` | Ensure VERSION variable is set and follows semver (vX.Y.Z) |
+| `make release VERSION=v1.0.0` | Create and push a release tag |
 | `make renovate-validate` | Validate Renovate configuration |
 
 ## Database migrations
@@ -137,6 +197,21 @@ npm run knex -- migrate:make my-migration
 ```
 
 Migrations also run automatically on backend startup via `npm run dev`.
+
+## CI/CD
+
+GitHub Actions runs on every push to `main`, tags `v*`, and pull requests.
+
+| Job | Triggers | Steps |
+|-----|----------|-------|
+| **sdk** | push, PR, tags | Compile, lint & test SDK; upload build artifact |
+| **backend-ci** | after sdk | Lint & typecheck backend |
+| **backend-unit** | after sdk + backend-ci | Unit tests with coverage |
+| **backend-integration** | after sdk + backend-ci | Integration tests with Postgres + Dapr sidecar |
+| **web-nextjs** | push, PR, tags | Lint & build Next.js frontend |
+| **web-react** | push, PR, tags | Lint & build React frontend |
+
+[Renovate](https://docs.renovatebot.com/) keeps dependencies up to date with platform automerge enabled.
 
 ## Further reading
 

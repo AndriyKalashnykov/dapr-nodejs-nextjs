@@ -1,0 +1,4 @@
+ignored:
+  # Scaffold templates and dev Dockerfiles use local image names (microservice-build,
+  # microservice-sdk-build) that are intentionally untagged
+  - DL3006

@@ -19,9 +19,3 @@ spec:
       noRetries:
         policy: constant
         maxRetries: 0
-  targets:
-    apps:
-      web-nuxt:
-        retry: noRetries
-      web-qwikjs:
-        retry: noRetries

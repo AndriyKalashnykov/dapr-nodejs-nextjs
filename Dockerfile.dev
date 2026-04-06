@@ -1,8 +1,8 @@
+# syntax=docker/dockerfile:1
 FROM microservice-build
 ENV NODE_ENV=development
 WORKDIR /workspace
 COPY /packages/@sos/sdk ./packages/@sos/sdk
 COPY package.json package-lock.json tsconfig.json .npmrc ./
-RUN npm install
-RUN npm run compile -w @sos/sdk
+RUN npm install && npm run compile -w @sos/sdk
 

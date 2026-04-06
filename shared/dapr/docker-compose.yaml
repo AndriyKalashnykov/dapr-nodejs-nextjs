@@ -3,7 +3,7 @@ name: demo-ts
 services:
   # Dapr placement service
   placement:
-    image: "docker.io/daprio/dapr@sha256:290973960f43fa85afc5c5cee232eaa554774f9f36075adf2478b2ee26bc8d25"
+    image: "docker.io/daprio/dapr:1.17.3"
     command: ["./placement", "-port", "50005"]
     ports:
       - "50005:50005"

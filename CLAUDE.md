@@ -240,6 +240,19 @@ gh run watch           # watch the latest CI run
 ### Keep Documentation Up to Date
 After any code or configuration change, review and update the project's `*.md` files if affected. This includes `README.md`, `CLAUDE.md`, service READMEs, and docs in `docs/`. Version numbers, command references, architecture descriptions, and environment variable tables must stay in sync with the code.
 
+## Adding a New Service
+
+See `docs/create-new-service.md` and use the scaffolds in `scaffolds/` directory. Each service needs: app container + Dapr sidecar container in its `docker-compose.yaml`.
+
+## Upgrade Backlog
+
+Items from the 2026-04-05 upgrade analysis that need monitoring or future action:
+
+- [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable release; no action until a newer version is published
+- [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 514 open issues; healthy but bus-factor risk — monitor for succession or fork activity
+- [ ] **Scaffold templates out of sync** — scaffolds use `microservice-build` base image while live services use `node:24-alpine` directly; decide canonical pattern and align
+- [ ] **Scaffold `.dockerignore` files** — only exclude `node_modules`; should also exclude `.git`, `*.md`, `.env*`, `dist/`, `build/`, `.next/`, `coverage/`
+
 ## Skills
 
 Use the following skills when working on related files:
@@ -252,6 +265,3 @@ Use the following skills when working on related files:
 | `.github/workflows/*.yml` | `/ci-workflow` |
 
 When spawning subagents, always pass conventions from the respective skill into the agent's prompt.
-
-## Adding a New Service
-See `docs/create-new-service.md` and use the scaffolds in `scaffolds/` directory. Each service needs: app container + Dapr sidecar container in its `docker-compose.yaml`.
