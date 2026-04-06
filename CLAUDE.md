@@ -244,14 +244,18 @@ After any code or configuration change, review and update the project's `*.md` f
 
 See `docs/create-new-service.md` and use the scaffolds in `scaffolds/` directory. Each service needs: app container + Dapr sidecar container in its `docker-compose.yaml`.
 
+### Dockerfile Base Image Strategy
+
+Two patterns coexist by design:
+- **Prod Dockerfiles** (`Dockerfile`) — use `node:24-alpine@sha256:...` pinned digest. Renovate auto-updates these. No `make setup` needed.
+- **Dev Dockerfiles** (`Dockerfile.dev`) — use `microservice-build` or `microservice-sdk-build` local images (built via `make setup`). These inject corporate certificates and pre-compile the SDK for the monorepo workspace pattern.
+
 ## Upgrade Backlog
 
 Items from the 2026-04-05 upgrade analysis that need monitoring or future action:
 
 - [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable release; no action until a newer version is published
 - [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 514 open issues; healthy but bus-factor risk — monitor for succession or fork activity
-- [ ] **Scaffold templates out of sync** — scaffolds use `microservice-build` base image while live services use `node:24-alpine` directly; decide canonical pattern and align
-- [ ] **Scaffold `.dockerignore` files** — only exclude `node_modules`; should also exclude `.git`, `*.md`, `.env*`, `dist/`, `build/`, `.next/`, `coverage/`
 
 ## Skills
 
