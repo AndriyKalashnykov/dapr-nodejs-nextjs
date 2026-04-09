@@ -7,7 +7,7 @@ CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "de
 NVM_VERSION      := 0.40.4
 NODE_VERSION     := 24
 ACT_VERSION      := 0.2.87
-DAPR_VERSION     := 1.17.0
+DAPR_VERSION     := 1.17.1
 HADOLINT_VERSION := 2.14.0
 
 # ── Project constants ───────────────────────────────────────────────────────
