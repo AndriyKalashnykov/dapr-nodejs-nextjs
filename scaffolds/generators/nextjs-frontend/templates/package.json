@@ -12,12 +12,12 @@
     "@dapr/dapr": "^3.4.1",
     "@tanstack/react-query": "^5.74.4",
     "jsonwebtoken": "^9.0.2",
-    "next": "16.2.2",
+    "next": "16.2.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "16.2.2",
+    "@next/eslint-plugin-next": "16.2.3",
     "@tailwindcss/postcss": "4.2.2",
     "@types/jsonwebtoken": "9.0.10",
     "@types/node": "24.12.2",
