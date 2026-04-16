@@ -258,7 +258,7 @@ Items from upgrade analyses that need monitoring or future action:
 - [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable release; no action until a newer version is published (carried from 2026-04-05)
 - [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 500+ open issues; healthy but bus-factor risk — monitor for succession or fork activity (carried from 2026-04-05)
 - [ ] **Azure Postgres Flexible Server at PG 17** — local dev runs PG 18; bump the `infra/azure` default when Azure adds PG 18 support.
-- [ ] **Next.js 16.2.4 prerender regression** — 16.2.4 crashes on `/_global-error` static generation under GH runner worker-pool sizing with `TypeError: Cannot read properties of null (reading 'useContext')`. Works locally with 8 workers, fails on CI with 3 workers. Pinned back to 16.2.3; unblock when 16.2.5 ships or Renovate lands a fixed minor.
+- [ ] **Next.js `/_global-error` prerender bug** — upstream [vercel/next.js#87719](https://github.com/vercel/next.js/issues/87719) (recurring across 16.0.3, 16.0.8, 16.1.1, 16.2.x). Worked around by defining `app/web-nextjs/src/app/global-error.tsx` — the existence of a user-defined `global-error.tsx` prevents Next.js from synthesizing the broken internal route. Bug manifests only on CI (3 workers) not locally (8 workers). Remove the workaround if Next.js publishes a fix with a "won't regress" commitment; until then keep the file — it's also best practice for prod error UX.
 
 ## Skills
 
