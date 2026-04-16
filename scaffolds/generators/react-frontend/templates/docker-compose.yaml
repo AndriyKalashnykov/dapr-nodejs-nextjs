@@ -2,7 +2,7 @@ name: demo-ts
 
 services:
   ############################
-  # React frontend
+  # Vite SPA frontend (React)
   ############################
   <%= name %>:
     labels:

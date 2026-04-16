@@ -13,7 +13,7 @@ const getEnv = () => {
 };
 const dapr = {
   host: process.env.DAPR_HOST || '127.0.0.1',
-  port: process.env.DAPR_PORT || '3001',
+  port: process.env.DAPR_PORT || '3500',
 };
 const env = getEnv();
 

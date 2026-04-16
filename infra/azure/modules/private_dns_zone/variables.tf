@@ -10,6 +10,7 @@ variable "resource_group_name" {
 
 variable "tags" {
   description = "(Optional) Specifies the tags of the private dns zone"
+  type        = map(any)
   default     = {}
 }
 

@@ -9,7 +9,7 @@ const authHeaders = (token: string) => ({
   },
 });
 
-const SERVICE_APP_ID = 'backend-ts';
+const SERVICE_APP_ID = process.env.BACKEND_APP_ID || 'backend-ts';
 
 const METHODS = {
   TodoGetAll: () => 'api/v1/todos',

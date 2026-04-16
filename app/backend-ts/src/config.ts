@@ -24,7 +24,7 @@ if (!serviceName) {
 
 const dapr = {
   host: process.env.DAPR_HOST || 'localhost',
-  port: process.env.DAPR_PORT || '3001',
+  port: process.env.DAPR_PORT || '3500',
 };
 const server = {
   host: process.env.SERVER_HOST || '0.0.0.0',

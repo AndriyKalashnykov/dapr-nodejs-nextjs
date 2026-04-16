@@ -17,3 +17,9 @@ output "app_id" {
   value       = azurerm_application_insights.resource.app_id
   description = "Specifies the resource id of the resource."
 }
+
+output "connection_string" {
+  value       = azurerm_application_insights.resource.connection_string
+  sensitive   = true
+  description = "Application Insights connection string. Modern replacement for instrumentation_key; use for OpenTelemetry exporters."
+}

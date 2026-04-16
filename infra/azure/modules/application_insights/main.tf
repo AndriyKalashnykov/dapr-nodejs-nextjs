@@ -20,7 +20,7 @@ resource "azurerm_application_insights" "resource" {
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
-  application_type    = "web"
+  application_type    = var.application_type
   workspace_id        = var.workspace_id
 
   lifecycle {

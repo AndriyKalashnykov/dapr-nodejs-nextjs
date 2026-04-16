@@ -4,7 +4,31 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore:
+      - '*.md'
+      - '!CLAUDE.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.claudeignore'
+      - '.claude/**'
+      - '**.png'
+      - '**.jpg'
+      - '**.gif'
+      - '**.svg'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - '!CLAUDE.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.claudeignore'
+      - '.claude/**'
+      - '**.png'
+      - '**.jpg'
+      - '**.gif'
+      - '**.svg'
   workflow_call:
 
 permissions:
@@ -14,23 +38,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  NODE_VERSION: '24'
-
 jobs:
   # ── Shared SDK ────────────────────────────────────────────────────────────────
   sdk:
-    name: SDK – compile, lint & test
+    name: SDK compile, lint and test
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
+          install: true
+          cache: true
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Compile, lint & test
         run: make sdk-ci
@@ -44,18 +71,24 @@ jobs:
 
   # ── Backend ───────────────────────────────────────────────────────────────────
   backend-ci:
-    name: Backend – lint & typecheck
+    name: Backend lint and typecheck
     needs: sdk
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
+          install: true
+          cache: true
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -66,18 +99,24 @@ jobs:
         run: make backend-lint
 
   backend-unit:
-    name: Backend – unit tests
+    name: Backend unit tests
     needs: [sdk, backend-ci]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
+          install: true
+          cache: true
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -90,7 +129,7 @@ jobs:
           SERVICE_NAME: backend-ts
 
   backend-integration:
-    name: Backend – integration tests
+    name: Backend integration tests
     needs: [sdk, backend-ci]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -110,11 +149,17 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
+          install: true
+          cache: true
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -195,42 +240,79 @@ jobs:
 
   # ── Frontends ─────────────────────────────────────────────────────────────────
   web-nextjs:
-    name: Web (Next.js) – lint & build
+    name: Web Next.js lint, test and build
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
+          install: true
+          cache: true
+
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
 
       - name: Lint & build
         run: make web-nextjs-ci
 
-  web-react:
-    name: Web (React) – lint & build
+  # ── E2E ───────────────────────────────────────────────────────────────────
+  e2e:
+    name: E2E full-stack smoke test
+    needs: [backend-integration, web-nextjs]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
+          install: true
+          cache: true
 
-      - name: Lint & build
-        run: make web-react-ci
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sdk-build
+          path: packages/@sos/sdk/build
+
+      - name: Build microservice base images
+        run: |
+          docker build ./shared/microservice -t microservice-build
+          docker build -f Dockerfile.dev -t microservice-sdk-build .
+
+      - name: Build service images
+        run: docker compose build --parallel
+
+      - name: Start stack
+        run: docker compose up -d
+
+      - name: Run e2e smoke test
+        run: bash e2e/e2e-test.sh
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v
 
   # ── Gate ───────────────────────────────────────────────────────────────────
   ci-pass:
-    name: CI ✓
     if: always()
-    needs: [sdk, backend-ci, backend-unit, backend-integration, web-nextjs, web-react]
+    needs: [sdk, backend-ci, backend-unit, backend-integration, web-nextjs, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

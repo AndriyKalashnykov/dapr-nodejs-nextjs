@@ -29,17 +29,8 @@ variable "subnets" {
 }
 
 variable "tags" {
-  description = "(Optional) Specifies the tags of the storage account"
+  description = "(Optional) Specifies the tags of the virtual network."
+  type        = map(any)
   default     = {}
 }
 
-variable "log_analytics_workspace_id" {
-  description = "Specifies the log analytics workspace id"
-  type        = string
-}
-
-variable "log_analytics_retention_days" {
-  description = "Specifies the number of days of the retention policy"
-  type        = number
-  default     = 7
-}

@@ -19,7 +19,7 @@
     "knex": "tsx ../../node_modules/knex/bin/cli.js --knexfile ./src/db/knexfile.ts"
   },
   "dependencies": {
-    "@dapr/dapr": "^3.5.2",
+    "@dapr/dapr": "^3.6.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.72.0",
     "@opentelemetry/exporter-metrics-otlp-proto": "^0.214.0",

@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": ["packages/@sos/*", "app/*"],
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "tsx": "4.21.0",
     "typescript": "6.0.2"
   }

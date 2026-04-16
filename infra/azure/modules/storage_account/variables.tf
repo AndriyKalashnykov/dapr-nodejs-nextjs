@@ -70,13 +70,9 @@ variable "virtual_network_subnet_ids" {
   type        = list(string)
 }
 
-variable "kind" {
-  description = "(Optional) Specifies the kind of the storage account"
-  default     = ""
-}
-
 variable "tags" {
   description = "(Optional) Specifies the tags of the storage account"
+  type        = map(any)
   default     = {}
 }
 

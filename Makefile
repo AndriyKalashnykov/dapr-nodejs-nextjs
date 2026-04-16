@@ -4,11 +4,8 @@ APP_NAME       := dapr-nodejs-nextjs
 CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
 
 # ── Pinned tool versions ────────────────────────────────────────────────────
-NVM_VERSION      := 0.40.4
-NODE_VERSION     := 24
-ACT_VERSION      := 0.2.87
-DAPR_VERSION     := 1.17.1
-HADOLINT_VERSION := 2.14.0
+# Single source of truth for node, dapr CLI, act, hadolint is `.mise.toml`.
+# System tools (podman, git) are installed via the OS package manager below.
 
 # ── Project constants ───────────────────────────────────────────────────────
 COMPOSE_PROJECT  := demo-ts
@@ -25,19 +22,16 @@ help:
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 
-#deps: @ Check and install required dependencies (node, npm, podman, dapr, git)
+#deps: @ Install mise-managed tools (node, dapr, act, hadolint) and system deps (podman, git)
 deps:
 	@echo "Checking dependencies..."
-	@command -v node >/dev/null 2>&1 || { echo "Installing Node.js via nvm..."; \
-		if [ -s "$$HOME/.nvm/nvm.sh" ]; then \
-			. "$$HOME/.nvm/nvm.sh" && nvm install $(NODE_VERSION); \
-		else \
-			echo "Installing nvm..."; \
-			curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v$(NVM_VERSION)/install.sh | bash; \
-			export NVM_DIR="$$HOME/.nvm"; \
-			. "$$NVM_DIR/nvm.sh" && nvm install $(NODE_VERSION); \
-		fi; \
+	@command -v mise >/dev/null 2>&1 || { \
+		echo "ERROR: mise is required. Install: https://mise.jdx.dev/getting-started.html"; \
+		echo "  Linux:  curl https://mise.run | sh"; \
+		echo "  macOS:  brew install mise"; \
+		exit 1; \
 	}
+	@mise install
 	@command -v podman >/dev/null 2>&1 || { echo "Installing Podman..."; \
 		if command -v apt-get >/dev/null 2>&1; then \
 			sudo apt-get update && sudo apt-get install -y podman; \
@@ -48,9 +42,6 @@ deps:
 		else \
 			echo "ERROR: Could not install podman. Install manually from https://podman.io/docs/installation"; exit 1; \
 		fi; \
-	}
-	@command -v dapr >/dev/null 2>&1 || { echo "Installing Dapr CLI $(DAPR_VERSION)..."; \
-		curl -fsSL https://raw.githubusercontent.com/dapr/cli/v$(DAPR_VERSION)/install/install.sh | /bin/bash -s $(DAPR_VERSION); \
 	}
 	@command -v git >/dev/null 2>&1 || { echo "Installing git..."; \
 		if command -v apt-get >/dev/null 2>&1; then \
@@ -63,21 +54,7 @@ deps:
 			echo "ERROR: Could not install git. Install manually from https://git-scm.com/downloads"; exit 1; \
 		fi; \
 	}
-	@echo "All dependencies checked."
-
-#deps-act: @ Install act for local GitHub Actions testing
-deps-act: deps
-	@command -v act >/dev/null 2>&1 || { echo "Installing act $(ACT_VERSION)..."; \
-		curl -sSfL https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash -s -- -b /usr/local/bin v$(ACT_VERSION); \
-	}
-
-#deps-hadolint: @ Install hadolint for Dockerfile linting
-deps-hadolint:
-	@command -v hadolint >/dev/null 2>&1 || { echo "Installing hadolint $(HADOLINT_VERSION)..."; \
-		sudo curl -sSfL -o /usr/local/bin/hadolint \
-			"https://github.com/hadolint/hadolint/releases/download/v$(HADOLINT_VERSION)/hadolint-Linux-x86_64"; \
-		sudo chmod +x /usr/local/bin/hadolint; \
-	}
+	@echo "All dependencies ready."
 
 #deps-check: @ Print installed tool versions
 deps-check:
@@ -99,7 +76,6 @@ clean:
 	@rm -rf packages/@sos/sdk/build/
 	@rm -rf app/backend-ts/dist/
 	@rm -rf app/web-nextjs/.next/
-	@rm -rf app/web-react/dist/
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -172,12 +148,11 @@ terminal:
 format: install
 	@npx prettier --write .
 
-#lint: @ Run lint and typecheck across all workspaces
-lint: install deps-hadolint
+#lint: @ Run lint and typecheck across all workspaces + Terraform validate/tflint
+lint: install infra-validate mermaid-lint
 	@npm run ci -w packages/@sos/sdk
 	@npm run ci -w app/backend-ts
 	@npm run lint -w app/web-nextjs
-	@npm run lint -w app/web-react
 	@find . -name 'Dockerfile*' -not -path '*/node_modules/*' -not -path '*/.next/*' | xargs hadolint
 
 #vulncheck: @ Run npm audit for known vulnerabilities
@@ -193,6 +168,82 @@ test: install
 test-integration: install
 	@podman exec demo-ts-postgres-1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;" 2>/dev/null || true
 	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 npm run test:integration:cov -w app/backend-ts
+
+#e2e: @ Run end-to-end smoke test against the full compose stack
+e2e: build
+	@echo "\n***Starting stack for e2e***\n"
+	@podman compose up -d
+	@echo "\n***Running e2e/e2e-test.sh***\n"
+	@bash e2e/e2e-test.sh; status=$$?; \
+	 echo "\n***Tearing down stack***\n"; \
+	 podman compose down >/dev/null 2>&1 || true; \
+	 exit $$status
+
+#e2e-browser: @ Run Playwright browser e2e against the running stack (requires `make up` first)
+e2e-browser: install
+	@npx playwright install --with-deps chromium >/dev/null 2>&1 || true
+	@npx playwright test --config e2e/playwright/playwright.config.ts
+
+# renovate: datasource=docker depName=minlag/mermaid-cli
+MERMAID_CLI_VERSION := 11.12.0
+
+#mermaid-lint: @ Validate every ```mermaid block in markdown using minlag/mermaid-cli (same engine GitHub uses)
+mermaid-lint:
+	@files=$$(grep -lF '```mermaid' README.md CLAUDE.md docs/*.md 2>/dev/null); \
+	 if [ -z "$$files" ]; then echo "No mermaid blocks found."; exit 0; fi; \
+	 echo "Linting mermaid blocks in: $$files"; \
+	 mkdir -p /tmp/mermaid-out; \
+	 for f in $$files; do \
+	   docker run --rm -u $$(id -u):$$(id -g) -v $$(pwd):/data -v /tmp/mermaid-out:/out \
+	     minlag/mermaid-cli:$(MERMAID_CLI_VERSION) \
+	     -i /data/$$f -o /out/$$(basename $$f .md).out.md >/dev/null \
+	     || { echo "mermaid lint failed in $$f"; exit 1; }; \
+	 done; \
+	 rm -rf /tmp/mermaid-out; \
+	 echo "All mermaid blocks valid."
+
+#infra-validate: @ Offline Terraform validation — syntax, types, fmt, tflint (no Azure credentials needed)
+infra-validate:
+	@echo "\n***terraform fmt -check***\n"
+	@cd infra/azure && mise exec -- terraform fmt -check -recursive
+	@echo "\n***terraform init (no backend) + validate***\n"
+	@cd infra/azure && mise exec -- terraform init -backend=false -input=false >/dev/null
+	@cd infra/azure && mise exec -- terraform validate
+	@rm -rf infra/azure/.terraform
+	@echo "\n***tflint (azurerm ruleset)***\n"
+	@docker run --rm -v $$(pwd)/infra/azure:/data -w /data -e TFLINT_PLUGIN_DIR=/data/.tflint.d/plugins ghcr.io/terraform-linters/tflint:latest --init >/dev/null
+	@docker run --rm -v $$(pwd)/infra/azure:/data -w /data -e TFLINT_PLUGIN_DIR=/data/.tflint.d/plugins ghcr.io/terraform-linters/tflint:latest --recursive --minimum-failure-severity=error
+
+#e2e-aca: @ Deploy to Azure Container Apps, run smoke test, destroy. INCURS AZURE COST (~$0.30–$1/run). Requires: az login (OIDC in CI), TF_VAR_AZURE_SUBSCRIPTION_ID, TF_VAR_jwt_secret_key, GIT_SHA.
+e2e-aca:
+	@: $${TF_VAR_AZURE_SUBSCRIPTION_ID:?required}
+	@: $${TF_VAR_jwt_secret_key:?required — seeded into Key Vault}
+	@SHA=$${GIT_SHA:-$$(git rev-parse --short HEAD)} ; \
+	 echo "\n***Building + pushing images tag=$$SHA***\n" && \
+	 cd infra/azure && terraform init -input=false && \
+	 ACR=$$(terraform output -raw container_registry_login_server 2>/dev/null || echo "") && \
+	 cd ../.. && \
+	 if [ -z "$$ACR" ]; then \
+	   echo "ACR not yet provisioned — running initial apply to create it"; \
+	   cd infra/azure && terraform apply -input=false -auto-approve \
+	     -target=module.container_registry && cd ../..; \
+	   ACR=$$(cd infra/azure && terraform output -raw container_registry_login_server); \
+	 fi && \
+	 az acr login --name "$${ACR%%.*}" && \
+	 docker build -t $$ACR/backend-ts:$$SHA -f app/backend-ts/Dockerfile . && \
+	 docker build -t $$ACR/web-nextjs:$$SHA -f app/web-nextjs/Dockerfile app/web-nextjs && \
+	 docker push $$ACR/backend-ts:$$SHA && \
+	 docker push $$ACR/web-nextjs:$$SHA && \
+	 echo "\n***terraform apply (tag=$$SHA)***\n" && \
+	 cd infra/azure && terraform apply -input=false -auto-approve \
+	   -var "backend_image_tag=$$SHA" -var "nextjs_image_tag=$$SHA" && cd ../.. && \
+	 echo "\n***Running e2e/e2e-aca.sh***\n" && \
+	 TF_DIR=infra/azure JWT_SECRET_KEY="$$TF_VAR_jwt_secret_key" bash e2e/e2e-aca.sh; \
+	 status=$$? ; \
+	 echo "\n***terraform destroy (always)***\n" && \
+	 (cd infra/azure && terraform destroy -input=false -auto-approve \
+	    -var "backend_image_tag=$$SHA" -var "nextjs_image_tag=$$SHA" >/dev/null 2>&1 || true) ; \
+	 exit $$status
 
 # ── Per-workspace CI targets (used by GitHub Actions) ────────────────────────
 
@@ -214,15 +265,15 @@ backend-test: install
 backend-test-integration: install
 	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 npm run test:integration:cov -w app/backend-ts
 
-#web-nextjs-ci: @ Next.js: lint and build
+#web-nextjs-test: @ Next.js: unit tests with coverage
+web-nextjs-test: install
+	@npm run test:cov -w app/web-nextjs
+
+#web-nextjs-ci: @ Next.js: lint, test, and build
 web-nextjs-ci: install
 	@npm run lint -w app/web-nextjs
+	@npm run test:cov -w app/web-nextjs
 	@JWT_SECRET_KEY=ci-build-placeholder npm run build -w app/web-nextjs
-
-#web-react-ci: @ React: lint and build
-web-react-ci: install
-	@npm run lint -w app/web-react
-	@npm run build -w app/web-react
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
@@ -295,8 +346,8 @@ release: check-version
 
 # ── Local CI with act ───────────────────────────────────────────────────────
 
-#ci-run: @ Run GitHub Actions workflow locally using act
-ci-run: deps-act
+#ci-run: @ Run GitHub Actions workflow locally using act (mise-managed)
+ci-run: deps
 	@act push --container-architecture linux/amd64 \
 		--artifact-server-path /tmp/act-artifacts
 
@@ -311,12 +362,13 @@ renovate-validate: deps
 		npx --yes renovate --platform=local; \
 	fi
 
-.PHONY: help deps deps-act deps-hadolint deps-check install clean \
+.PHONY: help deps deps-check install clean \
         setup build compile \
         up run up-db up-dapr up-otel up-infra down down-otel \
         debug terminal format lint vulncheck test test-integration \
         sdk-ci backend-lint backend-test backend-test-integration \
-        web-nextjs-ci web-react-ci \
+        web-nextjs-ci web-nextjs-test \
+        e2e e2e-browser e2e-aca infra-validate mermaid-lint \
         psql migrate redis-cli shell logs \
         prune login update upgrade \
         ci check-version release ci-run renovate-validate

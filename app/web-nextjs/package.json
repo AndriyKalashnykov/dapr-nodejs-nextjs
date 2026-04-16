@@ -6,19 +6,21 @@
     "dev": "WATCHPACK_POLLING=true next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest --config vitest.config.ts",
+    "test:cov": "vitest --config vitest.config.ts run --coverage"
   },
   "dependencies": {
-    "@dapr/dapr": "^3.4.1",
+    "@dapr/dapr": "^3.6.0",
     "@tanstack/react-query": "^5.74.4",
     "jsonwebtoken": "^9.0.2",
-    "next": "16.2.3",
+    "next": "16.2.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.11",
-    "@next/eslint-plugin-next": "16.2.3",
+    "@next/eslint-plugin-next": "16.2.4",
     "@tailwindcss/postcss": "4.2.2",
     "@types/jsonwebtoken": "9.0.10",
     "@types/node": "24.12.2",
@@ -27,6 +29,7 @@
     "eslint": "10.2.0",
     "tailwindcss": "4.2.2",
     "typescript": "6.0.2",
-    "typescript-eslint": "8.58.1"
+    "typescript-eslint": "8.58.1",
+    "vitest": "^4.1.0"
   }
 }

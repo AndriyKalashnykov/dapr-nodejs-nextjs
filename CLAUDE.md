@@ -41,6 +41,9 @@ make ci             # Full CI pipeline locally (lint + test + build)
 
 # Test (containers needed)
 make test-integration # Backend integration tests (requires Postgres + Dapr)
+make e2e              # End-to-end smoke test — `make up -d` + e2e/e2e-test.sh + `make down`
+make e2e-browser      # Playwright browser tests against a running stack
+make e2e-aca          # Deploy to Azure Container Apps + smoke + destroy (INCURS AZURE COST — see docs/deploy-aca.md)
 
 # Database
 make migrate        # Run pending DB migrations in running backend-ts container
@@ -81,12 +84,8 @@ cd app/backend-ts && NODE_ENV=test npx vitest --config src/lib/test/vitest.integ
 npm run dev    # Next.js dev server
 npm run build  # Production build (requires JWT_SECRET_KEY env var)
 npm run lint   # eslint .
-```
-
-### Frontend (`app/web-react`)
-```bash
-npm run dev    # Vite dev server
-npm run build  # tsc + Vite build
+npm run test   # Vitest unit tests (watch mode)
+npm run test:cov # Vitest unit tests with coverage (single run)
 ```
 
 ### Shared SDK (`packages/@sos/sdk`)
@@ -103,7 +102,6 @@ npm run ci       # tsc --noEmit + lint + prettier
 app/
   backend-ts/     Express 5 + Dapr sidecar backend
   web-nextjs/     Next.js 16 SSR frontend
-  web-react/      Vite/React SPA frontend
 packages/@sos/
   sdk/            Shared Dapr/DB/API utilities (must compile first — other packages depend on build/)
 shared/
@@ -119,8 +117,7 @@ scaffolds/        Code generators for new services
 
 | Service | Host Port | Access |
 |---|---|---|
-| Next.js frontend | 3000 | `http://localhost:3000` |
-| React frontend | 3100 | `http://localhost:3100` |
+| Next.js SSR frontend | 3000 | `http://localhost:3000` |
 | Swagger UI | 3001 | `http://localhost:3001/docs` |
 | Backend API (direct) | 3001 | `http://localhost:3001/api/v1/todos` |
 | Backend API (via Dapr) | 3500 | `http://localhost:3500/v1.0/invoke/backend-ts/method/...` |
@@ -172,9 +169,11 @@ Each backend feature follows a strict three-layer architecture:
 - Migrations live in `app/backend-ts/src/db/migrations/`
 - DB credentials come from Dapr secretstore (not env vars) — see `buildServiceContext()` in SDK
 
-### Testing
-- **Unit tests**: `*.test.ts` — Vitest with mocked Dapr and SDK context (see `vitest.setup.ts`)
-- **Integration tests**: `*.integration.test.ts` — real Postgres + Dapr sidecar. Tables truncated between tests. `maxConcurrency: 1` to avoid DB race conditions.
+### Testing (three-layer pyramid)
+- **Unit** (`make test`, seconds): `*.test.ts` — Vitest with mocked Dapr and SDK context (see `vitest.setup.ts`). Covers backend-ts, SDK, and web-nextjs (`services/backend-ts.test.ts` covers the Dapr invoker path with mocked `DaprClient`).
+- **Integration** (`make test-integration`, tens of seconds): `*.integration.test.ts` — real Postgres + Dapr sidecar. Tables truncated between tests. `maxConcurrency: 1` to avoid DB race conditions.
+- **E2E** (`make e2e`, minutes): `e2e/e2e-test.sh` — compose-based smoke. Brings up the full stack, exercises backend direct + via Dapr sidecar, verifies 5 service endpoints (Next.js SSR, Swagger, Dapr Dashboard, Zipkin, Grafana), asserts scheduler TCP reachability, covers negative cases (401 no-auth, 404 nonexistent). Optional browser layer: `make e2e-browser` (Playwright against `localhost:3000`).
+- **Markdown / diagrams** (`make mermaid-lint`, seconds): validates every `` ```mermaid `` block in `README.md` / `CLAUDE.md` / `docs/*.md` via pinned `minlag/mermaid-cli` (same engine GitHub renders with). Wired into `make lint` — catches broken Mermaid diagrams before they silently break README rendering on github.com.
 - Framework: Vitest 4 with supertest for HTTP testing
 - Test helpers: `getAuthHeader()` generates JWT tokens, `expectApiDataResponse()`/`expectApiError()` for assertions
 
@@ -182,7 +181,11 @@ Each backend feature follows a strict three-layer architecture:
 Each CI job calls a dedicated Makefile target (`make sdk-ci`, `make backend-lint`, etc.). SDK compiles first and its `build/` artifact is shared with downstream jobs:
 1. **SDK** (`make sdk-ci`): compile → lint → unit tests → upload `sdk-build` artifact
 2. **Backend** (parallel, depends on SDK): `make backend-lint`, `make backend-test`, `make backend-test-integration` (with Postgres service + Dapr sidecar)
-3. **Frontends** (parallel, no SDK dependency): `make web-nextjs-ci`, `make web-react-ci`
+3. **Frontend** (parallel, no SDK dependency): `make web-nextjs-ci` (lint + Vitest + build)
+4. **E2E** (depends on backend-integration + web-nextjs): builds service images, `docker compose up -d`, runs `e2e/e2e-test.sh`
+
+### Port allocation in CI / parallel runs
+Service ports default to the values in `.env.example` (3000, 3001, 3500, …). For parallel test runs on the same host (two local runs, parallel CI jobs), use `scripts/pick-port.sh` (returns one free port) or `scripts/write-env-ports.sh` (writes an env file or `$GITHUB_ENV` with free ports for every service). Node code reads all ports from `process.env.*` — see `app/backend-ts/src/config.ts` and `app/web-nextjs/src/config.ts`. Never hardcode a port in new code.
 
 ### Observability
 - **Logging**: Pino with structured JSON; log level via `LOG_LEVEL` env var
@@ -200,7 +203,6 @@ Each CI job calls a dedicated Makefile target (`make sdk-ci`, `make backend-lint
 | `JWT_SECRET_KEY` | backend, web-nextjs | `secret` | JWT signing key |
 | `DB_HOST/PORT/NAME/SCHEMA` | backend | postgres/5432/postgres/backend_ts | |
 | `OTLP_ENDPOINT` | all | — | OpenTelemetry collector URL |
-| `VITE_API_GATEWAY_BASE_URL` | web-react | — | Backend API URL |
 | `NODE_ENV` | all | `development` | `test` appends `_test` to DB schema |
 
 ## Workflow Rules
@@ -218,8 +220,7 @@ make up -d             # start the stack (detached)
 make test-integration  # integration tests (requires running stack)
 ```
 Verify all URLs from the README "Start, test, stop" section are reachable and return expected results:
-- `http://localhost:3000` — Next.js frontend loads HTML
-- `http://localhost:3100` — React frontend loads HTML
+- `http://localhost:3000` — Next.js SSR frontend loads HTML
 - `http://localhost:3001/docs` — Swagger UI loads in browser
 - `http://localhost:8888` — Dapr Dashboard loads
 - `http://localhost:9411` — Zipkin tracing loads
@@ -252,10 +253,11 @@ Two patterns coexist by design:
 
 ## Upgrade Backlog
 
-Items from the 2026-04-05 upgrade analysis that need monitoring or future action:
+Items from upgrade analyses that need monitoring or future action:
 
-- [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable release; no action until a newer version is published
-- [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 514 open issues; healthy but bus-factor risk — monitor for succession or fork activity
+- [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable release; no action until a newer version is published (carried from 2026-04-05)
+- [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 500+ open issues; healthy but bus-factor risk — monitor for succession or fork activity (carried from 2026-04-05)
+- [ ] **Azure Postgres Flexible Server at PG 17** — local dev runs PG 18; bump the `infra/azure` default when Azure adds PG 18 support.
 
 ## Skills
 
@@ -266,6 +268,6 @@ Use the following skills when working on related files:
 | `Makefile` | `/makefile` |
 | `renovate.json` | `/renovate` |
 | `README.md` | `/readme` |
-| `.github/workflows/*.yml` | `/ci-workflow` |
+| `.github/workflows/*.{yml,yaml}` | `/ci-workflow` |
 
 When spawning subagents, always pass conventions from the respective skill into the agent's prompt.

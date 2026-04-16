@@ -12,6 +12,7 @@ resource "azurerm_redis_cache" "redis_cache" {
   name                          = var.cache_name
   resource_group_name           = var.resource_group_name
   location                      = var.location
+  tags                          = var.tags
   capacity                      = 0 // 0 = 250mb, 1 = 1gb, 2 = 2.5gb
   family                        = "C"
   sku_name                      = "Basic"

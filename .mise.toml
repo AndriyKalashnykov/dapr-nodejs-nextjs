@@ -1,0 +1,32 @@
+# Single source of truth for developer toolchain versions.
+#
+# Install: `mise install` (mise picks this up automatically in the project dir).
+# Bootstrap: `make deps` runs `mise install` and installs the non-mise
+# system requirements (podman, git).
+#
+# To update a version: edit here, then `make deps`. CI auto-syncs via
+# jdx/mise-action reading this file.
+#
+# mise docs: https://mise.jdx.dev/
+
+[tools]
+# JavaScript runtime (replaces Makefile NVM_VERSION / NODE_VERSION).
+node = "24"
+
+# Dapr CLI — pinned to keep compose sidecar / CLI lockstep with Azure infra
+# and with CI steps that `dapr run`.
+"aqua:dapr/cli" = "1.17.1"
+
+# Local GitHub Actions runner (for `make ci-run`).
+"aqua:nektos/act" = "0.2.87"
+
+# Dockerfile lint (wired into `make lint`).
+"aqua:hadolint/hadolint" = "2.14.0"
+
+# Terraform — used by infra-validate and e2e-aca targets.
+terraform = "1.9.8"
+
+[env]
+# mise loads this into the shell when you `cd` into the repo, so test / dev
+# commands see sane defaults without a separate .env read.
+NODE_ENV = "development"

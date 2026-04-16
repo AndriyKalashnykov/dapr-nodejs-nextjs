@@ -2,7 +2,6 @@
   "files": [],
   "references": [
     { "path": "packages/@sos/sdk" },
-    { "path": "app/backend-ts" },
-    { "path": "app/web-react" }
+    { "path": "app/backend-ts" }
   ]
 }

@@ -52,10 +52,8 @@ variable "private_dns_zone_group_ids" {
 }
 
 variable "tags" {
-  description = "(Optional) Specifies the tags of the network security group"
+  description = "(Optional) Specifies the tags of the private endpoint."
+  type        = map(any)
   default     = {}
 }
 
-variable "private_dns" {
-  default = {}
-}

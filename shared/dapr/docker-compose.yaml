@@ -1,12 +1,22 @@
 name: demo-ts
 
 services:
-  # Dapr placement service
+  # Dapr placement service (actor placement)
   placement:
-    image: "docker.io/daprio/dapr:1.17.4@sha256:8e4da92d1e15a7aca7ecf416947d14d5a5db83ae502283219724d9608ff0e7d1"
+    image: "docker.io/daprio/dapr:1.17.5@sha256:a30a5b9089b7635b636587379a7c2086017fe1559d3f096d3f10326fafa22313"
     command: ["./placement", "-port", "50005"]
     ports:
       - "50005:50005"
+    networks:
+      - dapr-net
+  # Dapr scheduler service (Jobs API / actor reminders, 1.14+)
+  scheduler:
+    image: "docker.io/daprio/dapr:1.17.5@sha256:a30a5b9089b7635b636587379a7c2086017fe1559d3f096d3f10326fafa22313"
+    command: ["./scheduler", "--port", "50006", "--etcd-data-dir", "/var/run/dapr/scheduler"]
+    ports:
+      - "50006:50006"
+    volumes:
+      - scheduler-data:/var/run/dapr/scheduler
     networks:
       - dapr-net
   # Dapr state and pubsub provider
@@ -47,3 +57,6 @@ services:
 networks:
   dapr-net: # here we set the network name
     driver: bridge
+
+volumes:
+  scheduler-data:
