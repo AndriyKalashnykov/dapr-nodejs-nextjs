@@ -258,6 +258,7 @@ Items from upgrade analyses that need monitoring or future action:
 - [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable release; no action until a newer version is published (carried from 2026-04-05)
 - [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 500+ open issues; healthy but bus-factor risk — monitor for succession or fork activity (carried from 2026-04-05)
 - [ ] **Azure Postgres Flexible Server at PG 17** — local dev runs PG 18; bump the `infra/azure` default when Azure adds PG 18 support.
+- [ ] **Next.js 16.2.4 prerender regression** — 16.2.4 crashes on `/_global-error` static generation under GH runner worker-pool sizing with `TypeError: Cannot read properties of null (reading 'useContext')`. Works locally with 8 workers, fails on CI with 3 workers. Pinned back to 16.2.3; unblock when 16.2.5 ships or Renovate lands a fixed minor.
 
 ## Skills
 
