@@ -287,6 +287,12 @@ jobs:
           name: sdk-build
           path: packages/@sos/sdk/build
 
+      # The e2e smoke script uses `node -e "require('jsonwebtoken')..."` to
+      # forge a dev JWT. Install workspace deps on the runner so the require
+      # resolves (containers have their own node_modules; the runner doesn't).
+      - name: Install workspace dependencies for e2e script
+        run: npm ci
+
       - name: Build microservice base images
         run: |
           docker build ./shared/microservice -t microservice-build
