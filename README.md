@@ -399,10 +399,6 @@ The `e2e-aca` workflow runs Trivy image scan between `docker build` and `docker 
 
 `ignore-unfixed: true` skips CVEs with no upstream fix available. Cosign signing, multi-arch, and buildkit attestations are deliberately omitted — the images are ephemeral (destroyed by `terraform destroy` at the end of each run), only consumed by the project's own ACA deploy, and only run on `amd64`.
 
-### Supply-chain protection: CODEOWNERS
-
-`.github/CODEOWNERS` requires owner review on PRs touching `.github/**`, `**/Dockerfile*`, `infra/**`, `renovate.json`, `.mise.toml`, `.env.example`, `CLAUDE.md`, and `.claude/**`. Enforce via branch protection: **Settings → Branches → main → Require review from Code Owners**. Even if a bot or prompt-injection attack pushes a change to the publish pipeline, it can't merge without approval.
-
 ## Contributing
 
 Contributions welcome — open a PR. Before pushing, run `make ci` for the fast local pipeline and `make e2e` for a full-stack smoke test.
