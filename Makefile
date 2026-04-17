@@ -59,16 +59,16 @@ deps:
 #deps-check: @ Print installed tool versions
 deps-check:
 	@echo "node:    $$(node --version 2>/dev/null || echo 'not installed')"
-	@echo "npm:     $$(npm --version 2>/dev/null || echo 'not installed')"
+	@echo "pnpm:    $$(pnpm --version 2>/dev/null || echo 'not installed')"
 	@echo "podman:  $$(podman --version 2>/dev/null || echo 'not installed')"
 	@echo "dapr:    $$(dapr version --output json 2>/dev/null | grep -o '"Cli version":"[^"]*"' || echo 'not installed')"
 	@echo "git:     $$(git --version 2>/dev/null || echo 'not installed')"
 	@echo "act:     $$(act --version 2>/dev/null || echo 'not installed')"
 	@echo "hadolint: $$(hadolint --version 2>/dev/null || echo 'not installed')"
 
-#install: @ Install npm dependencies
+#install: @ Install pnpm dependencies
 install: deps
-	@npm ci
+	@pnpm install --frozen-lockfile
 
 #clean: @ Remove build artifacts and node_modules
 clean:
@@ -91,8 +91,8 @@ build: deps
 
 #compile: @ Compile SDK and backend TypeScript
 compile: install
-	@npm run compile -w packages/@sos/sdk
-	@npm run compile -w app/backend-ts
+	@pnpm --filter @sos/sdk run compile
+	@pnpm --filter backend-ts run compile
 
 # ── Stack Management ─────────────────────────────────────────────────────────
 
@@ -146,28 +146,28 @@ terminal:
 
 #format: @ Auto-format code with Prettier across all workspaces
 format: install
-	@npx prettier --write .
+	@pnpm exec prettier --write .
 
 #lint: @ Run lint and typecheck across all workspaces + Terraform validate/tflint
 lint: install infra-validate mermaid-lint
-	@npm run ci -w packages/@sos/sdk
-	@npm run ci -w app/backend-ts
-	@npm run lint -w app/web-nextjs
+	@pnpm --filter @sos/sdk run ci
+	@pnpm --filter backend-ts run ci
+	@pnpm --filter web-nextjs run lint
 	@find . -name 'Dockerfile*' -not -path '*/node_modules/*' -not -path '*/.next/*' | xargs hadolint
 
-#vulncheck: @ Run npm audit for known vulnerabilities
+#vulncheck: @ Run pnpm audit for known vulnerabilities
 vulncheck: install
-	@npm audit --audit-level=moderate || true
+	@pnpm audit --audit-level=moderate || true
 
 #test: @ Run unit tests across SDK and backend
 test: install
-	@npm run test:cov -w packages/@sos/sdk
-	@npm run test:cov -w app/backend-ts
+	@pnpm --filter @sos/sdk run test:cov
+	@pnpm --filter backend-ts run test:cov
 
 #test-integration: @ Run backend integration tests (requires Postgres + Dapr sidecar)
 test-integration: install
 	@podman exec demo-ts-postgres-1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;" 2>/dev/null || true
-	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 npm run test:integration:cov -w app/backend-ts
+	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 pnpm --filter backend-ts run test:integration:cov
 
 #e2e: @ Run end-to-end smoke test against the full compose stack
 e2e: build
@@ -181,8 +181,8 @@ e2e: build
 
 #e2e-browser: @ Run Playwright browser e2e against the running stack (requires `make up` first)
 e2e-browser: install
-	@npx playwright install --with-deps chromium >/dev/null 2>&1 || true
-	@npx playwright test --config e2e/playwright/playwright.config.ts
+	@pnpm exec playwright install --with-deps chromium >/dev/null 2>&1 || true
+	@pnpm exec playwright test --config e2e/playwright/playwright.config.ts
 
 # renovate: datasource=docker depName=minlag/mermaid-cli
 MERMAID_CLI_VERSION := 11.12.0
@@ -231,7 +231,7 @@ e2e-aca:
 	 fi && \
 	 az acr login --name "$${ACR%%.*}" && \
 	 docker build -t $$ACR/backend-ts:$$SHA -f app/backend-ts/Dockerfile . && \
-	 docker build -t $$ACR/web-nextjs:$$SHA -f app/web-nextjs/Dockerfile app/web-nextjs && \
+	 docker build -t $$ACR/web-nextjs:$$SHA -f app/web-nextjs/Dockerfile . && \
 	 docker push $$ACR/backend-ts:$$SHA && \
 	 docker push $$ACR/web-nextjs:$$SHA && \
 	 echo "\n***terraform apply (tag=$$SHA)***\n" && \
@@ -249,31 +249,31 @@ e2e-aca:
 
 #sdk-ci: @ SDK: compile, lint, and test
 sdk-ci: install
-	@npm run compile -w packages/@sos/sdk
-	@npm run ci -w packages/@sos/sdk
-	@npm run test:cov -w packages/@sos/sdk
+	@pnpm --filter @sos/sdk run compile
+	@pnpm --filter @sos/sdk run ci
+	@pnpm --filter @sos/sdk run test:cov
 
 #backend-lint: @ Backend: lint and typecheck
 backend-lint: install
-	@npm run ci -w app/backend-ts
+	@pnpm --filter backend-ts run ci
 
 #backend-test: @ Backend: unit tests with coverage
 backend-test: install
-	@npm run test:cov -w app/backend-ts
+	@pnpm --filter backend-ts run test:cov
 
 #backend-test-integration: @ Backend: integration tests with coverage (requires Postgres + Dapr)
 backend-test-integration: install
-	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 npm run test:integration:cov -w app/backend-ts
+	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 pnpm --filter backend-ts run test:integration:cov
 
 #web-nextjs-test: @ Next.js: unit tests with coverage
 web-nextjs-test: install
-	@npm run test:cov -w app/web-nextjs
+	@pnpm --filter web-nextjs run test:cov
 
 #web-nextjs-ci: @ Next.js: lint, test, and build
 web-nextjs-ci: install
-	@npm run lint -w app/web-nextjs
-	@npm run test:cov -w app/web-nextjs
-	@JWT_SECRET_KEY=ci-build-placeholder npm run build -w app/web-nextjs
+	@pnpm --filter web-nextjs run lint
+	@pnpm --filter web-nextjs run test:cov
+	@JWT_SECRET_KEY=ci-build-placeholder pnpm --filter web-nextjs run build
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
@@ -284,7 +284,7 @@ psql:
 
 #migrate: @ Run pending database migrations in running backend-ts container
 migrate:
-	@podman compose exec backend-ts npm run knex -w app/backend-ts -- migrate:latest
+	@podman compose exec backend-ts pnpm run knex -- migrate:latest
 
 # ── Diagnostics ──────────────────────────────────────────────────────────────
 
@@ -312,14 +312,14 @@ prune:
 login:
 	@podman login docker.io
 
-#update: @ Update npm dependencies to latest allowed versions
+#update: @ Update pnpm dependencies to latest allowed versions
 update: deps
-	@npm update
+	@pnpm update
 
-#upgrade: @ Upgrade npm dependencies to latest versions (ignoring ranges)
+#upgrade: @ Upgrade pnpm dependencies to latest versions (ignoring ranges)
 upgrade: deps
-	@npx npm-check-updates -u
-	@npm install
+	@pnpm dlx npm-check-updates -u
+	@pnpm install
 
 # ── CI / Release ─────────────────────────────────────────────────────────────
 
@@ -356,10 +356,10 @@ ci-run: deps
 #renovate-validate: @ Validate Renovate configuration
 renovate-validate: deps
 	@if [ -n "$$GH_ACCESS_TOKEN" ]; then \
-		GITHUB_COM_TOKEN=$$GH_ACCESS_TOKEN npx --yes renovate --platform=local; \
+		GITHUB_COM_TOKEN=$$GH_ACCESS_TOKEN pnpm dlx renovate --platform=local; \
 	else \
 		echo "Warning: GH_ACCESS_TOKEN not set, some dependency lookups may fail"; \
-		npx --yes renovate --platform=local; \
+		pnpm dlx renovate --platform=local; \
 	fi
 
 .PHONY: help deps deps-check install clean \

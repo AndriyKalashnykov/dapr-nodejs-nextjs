@@ -4,13 +4,15 @@ FROM microservice-sdk-build AS build
 ENV NODE_ENV=development
 WORKDIR /workspace/app/backend-ts
 COPY package.json .npmrc tsconfig.json ./
-RUN npm install
+WORKDIR /workspace
+RUN pnpm install
 
 # Run
 FROM microservice-sdk-build
 WORKDIR /workspace/app/backend-ts
 COPY --from=build /workspace/app/backend-ts /workspace/app/backend-ts
+COPY --from=build /workspace/node_modules /workspace/node_modules
 COPY /src /workspace/app/backend-ts/src
 EXPOSE 3001
 WORKDIR /workspace
-CMD [ "npm", "run", "dev", "-w", "app/backend-ts" ]
+CMD [ "pnpm", "--filter", "backend-ts", "run", "dev" ]

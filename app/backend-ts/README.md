@@ -7,7 +7,7 @@ podman compose exec backend-ts sh
 
 // Commandline opened inside the running container
 
-/app # npm run knex -- migrate:list
+/app # pnpm run knex -- migrate:list
 
 // Command output from inside the running container
 
@@ -29,7 +29,7 @@ Found 1 Pending Migration file/files.
 Using the microservice name matching this service (ex. `app/{MICROSERVICE_NAME}`), execute commands using `podman compose` to create a new migration file.
 
 ```
-podman compose exec backend-ts npm run knex -- migrate:make my-new-migration
+podman compose exec backend-ts pnpm run knex -- migrate:make my-new-migration
 
 // Command output from inside the running container
 

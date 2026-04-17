@@ -8,17 +8,16 @@ Generators:
 - `react-frontend`: A frontend SPA using React and Vite.
 
 ## Prerequisites
-Yeoman must be installed globally on your machine. You can install it using npm:
+Yeoman must be installed globally. Use pnpm:
 ```bash
-npm install -g yo
+pnpm add -g yo
 ```
 
 ## Steps
 1. From project root directory run a generator. Example;
     - `yo ./scaffolds/generators/express-backend {name}`
 2. The new service will be created using the provided scaffold and can be found in `app/{name}`.
-3. From the new services directory, perform the following steps:
-    - `npm install` to install the dependencies.
+3. From the project root, run `pnpm install` so the workspace symlinks the new package and resolves its dependencies.
     - Modify `docker-compose.yaml` (and any other docker-compose files to set environment variables, ports, volumes, etc).
 4. From the project root directory, perform the following steps:
     - Add the new service to the projects root `docker-compose.yaml` file under `include:`.

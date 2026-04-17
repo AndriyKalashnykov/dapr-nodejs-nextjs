@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "compile": "tsc --build",
-    "ci": "tsc --noEmit && npm run lint && npm run prettier",
+    "ci": "tsc --noEmit && pnpm run lint && pnpm run prettier",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "prettier": "prettier -c .",

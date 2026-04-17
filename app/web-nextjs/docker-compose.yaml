@@ -11,7 +11,7 @@ services:
       dockerfile: ./Dockerfile.dev
     ports:
       - "3000:3000"
-    command: npm run dev
+    command: pnpm run dev
     environment:
       DAPR_HOST: 127.0.0.1
       DAPR_PORT: 3500

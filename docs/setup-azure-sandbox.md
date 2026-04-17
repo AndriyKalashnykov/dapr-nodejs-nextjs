@@ -109,7 +109,7 @@ cd ~/dapr-nodejs-nextjs
 Install dependencies and build:
 
 ```bash
-make install        # Install npm packages
+make install        # Install pnpm packages
 make setup          # Build base Docker images (first time only)
 make build          # Build service containers
 make up             # Start the full stack

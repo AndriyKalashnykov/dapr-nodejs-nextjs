@@ -43,13 +43,13 @@ C4Context
 | Observability | OpenTelemetry SDK → Zipkin + Grafana OTEL stack |
 | Tests | Vitest 4 (unit + integration), shell-based compose e2e, Playwright browser e2e |
 | Container runtime | Podman 4.9+ (Docker-compatible); `docker compose` in CI |
-| Monorepo | npm workspaces (`app/*`, `packages/@sos/*`) |
+| Monorepo | pnpm workspaces (`app/*`, `packages/@sos/*`) |
 | Production target | Azure Container Apps (`infra/azure/`, Terraform) |
 
 ## Quick Start
 
 ```bash
-make deps && make install && make setup   # install tools, npm packages, base images
+make deps && make install && make setup   # install tools, pnpm packages, base images
 make build                                # build service containers
 make up                                   # start the full stack (Ctrl-C to stop)
 ```
@@ -110,8 +110,8 @@ Install [Podman Desktop](https://podman-desktop.io/) and enable the "Compose" ex
 
 ```bash
 # First time only
-make deps           # Check and install required dependencies (node, npm, podman, dapr, git)
-make install        # Install npm dependencies
+make deps           # Check and install required dependencies (node, pnpm, podman, dapr, git)
+make install        # Install pnpm dependencies
 make setup          # Build base Docker images (run once after clone)
 
 # Start
@@ -269,9 +269,9 @@ Run `make help` to see all targets.
 | Target | Description |
 |--------|-------------|
 | `make help` | List available tasks |
-| `make deps` | Check and install required dependencies (node, npm, podman, dapr, git) |
+| `make deps` | Check and install required dependencies (node, pnpm, podman, dapr, git) |
 | `make deps-check` | Print installed tool versions |
-| `make install` | Install npm dependencies |
+| `make install` | Install pnpm dependencies |
 | `make clean` | Remove build artifacts and node_modules |
 | `make setup` | Build base Docker images (run once after clone) |
 | `make build` | Build all service containers in parallel |
@@ -296,7 +296,7 @@ Run `make help` to see all targets.
 |--------|-------------|
 | `make format` | Auto-format code with Prettier across all workspaces |
 | `make lint` | Run lint and typecheck across all workspaces |
-| `make vulncheck` | Run npm audit for known vulnerabilities |
+| `make vulncheck` | Run pnpm audit for known vulnerabilities |
 | `make test` | Run unit tests across SDK and backend |
 | `make test-integration` | Run backend integration tests (requires Postgres + Dapr sidecar) |
 | `make migrate` | Run pending database migrations in running backend-ts container |
@@ -331,8 +331,8 @@ Run `make help` to see all targets.
 |--------|-------------|
 | `make prune` | Remove unused Podman containers, images, and volumes |
 | `make login` | Login to Docker Hub via Podman |
-| `make update` | Update npm dependencies to latest allowed versions |
-| `make upgrade` | Upgrade npm dependencies to latest versions (ignoring ranges) |
+| `make update` | Update pnpm dependencies to latest allowed versions |
+| `make upgrade` | Upgrade pnpm dependencies to latest versions (ignoring ranges) |
 
 ### CI / Release
 
@@ -355,10 +355,10 @@ Migrations run inside the backend container (DB credentials come from Dapr secre
 make up                              # Start the stack
 make migrate                         # Run pending migrations
 SERVICE=backend-ts make terminal     # Or shell in and create new ones:
-npm run knex -- migrate:make my-migration
+pnpm run knex -- migrate:make my-migration
 ```
 
-Migrations also run automatically on backend startup via `npm run dev`.
+Migrations also run automatically on backend startup via `pnpm run dev`.
 
 ## CI/CD
 

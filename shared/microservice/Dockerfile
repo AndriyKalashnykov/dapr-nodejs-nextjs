@@ -7,6 +7,14 @@ ENV CERT_FILE_PATH=${CERT_HOME}/zscaler_chain_root-int.pem
 RUN mkdir -p ${CERT_HOME}
 COPY zscaler_chain_root-int.pem ${CERT_FILE_PATH}
 
-# npm settings
+# Enable pnpm via corepack — single source of truth is root package.json's
+# `packageManager` field, but corepack still needs an explicit prepare to
+# avoid the first-use download prompt at runtime.
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+
+# Trust corporate CA cert when ADD_CERT=true.
 ARG ADD_CERT
-RUN if [ "$ADD_CERT" = "true" ]; then npm config set cafile ${CERT_FILE_PATH}; else echo "No CA cert added."; fi
+RUN if [ "$ADD_CERT" = "true" ]; then \
+      npm config set cafile ${CERT_FILE_PATH} && \
+      pnpm config set cafile ${CERT_FILE_PATH}; \
+    else echo "No CA cert added."; fi

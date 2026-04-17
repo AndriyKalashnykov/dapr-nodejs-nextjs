@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Dapr-based microservices platform using Node.js/TypeScript with npm workspaces (monorepo). Services communicate through Dapr sidecars for state management, pub/sub, and service invocation. Container runtime is Podman (Docker-compatible).
+Dapr-based microservices platform using Node.js/TypeScript with pnpm workspaces (monorepo). Services communicate through Dapr sidecars for state management, pub/sub, and service invocation. Container runtime is Podman (Docker-compatible).
 
 ## Common Commands
 
 ### Workspace Commands
-This is an npm workspace monorepo. Run commands from repo root using `-w`:
+This is a pnpm workspace monorepo. Run commands from repo root using `--filter`:
 ```bash
-npm run test -w app/backend-ts          # Run in specific workspace
-npm run compile -w packages/@sos/sdk    # SDK must be compiled before backend
+pnpm --filter backend-ts run test         # Run in specific workspace
+pnpm --filter @sos/sdk run compile        # SDK must be compiled before backend
 ```
 
 ### Makefile (run `make help` for full list)
@@ -64,35 +64,35 @@ make renovate-validate      # Validate Renovate configuration
 
 ### Backend (`app/backend-ts`)
 ```bash
-npm run dev              # Hot reload dev server (runs DB migrations first)
-npm run compile          # TypeScript compilation
-npm run ci               # tsc --noEmit + lint + prettier
-npm run test             # Unit tests (Vitest, watch mode)
-npm run test:cov         # Unit tests with coverage (single run)
-npm run test:integration # Integration tests (requires Postgres + Dapr sidecar)
-npm run knex -- migrate:make <name>  # Create new DB migration
-npm run knex -- migrate:latest       # Run pending migrations
+pnpm run dev              # Hot reload dev server (runs DB migrations first)
+pnpm run compile          # TypeScript compilation
+pnpm run ci               # tsc --noEmit + lint + prettier
+pnpm run test             # Unit tests (Vitest, watch mode)
+pnpm run test:cov         # Unit tests with coverage (single run)
+pnpm run test:integration # Integration tests (requires Postgres + Dapr sidecar)
+pnpm run knex -- migrate:make <name>  # Create new DB migration
+pnpm run knex -- migrate:latest       # Run pending migrations
 
 # Run a single test file
-cd app/backend-ts && npx vitest --config src/lib/test/vitest.config.ts run src/services/todo.test.ts
+cd app/backend-ts && pnpm exec vitest --config src/lib/test/vitest.config.ts run src/services/todo.test.ts
 # Run a single integration test
-cd app/backend-ts && NODE_ENV=test npx vitest --config src/lib/test/vitest.integration.config.ts run src/handlers/api/todo.integration.test.ts
+cd app/backend-ts && NODE_ENV=test pnpm exec vitest --config src/lib/test/vitest.integration.config.ts run src/handlers/api/todo.integration.test.ts
 ```
 
 ### Frontend (`app/web-nextjs`)
 ```bash
-npm run dev    # Next.js dev server
-npm run build  # Production build (requires JWT_SECRET_KEY env var)
-npm run lint   # eslint .
-npm run test   # Vitest unit tests (watch mode)
-npm run test:cov # Vitest unit tests with coverage (single run)
+pnpm run dev    # Next.js dev server
+pnpm run build  # Production build (requires JWT_SECRET_KEY env var)
+pnpm run lint   # eslint .
+pnpm run test   # Vitest unit tests (watch mode)
+pnpm run test:cov # Vitest unit tests with coverage (single run)
 ```
 
 ### Shared SDK (`packages/@sos/sdk`)
 ```bash
-npm run compile  # tsc --build (must run before backend compiles/tests)
-npm run test     # Vitest unit tests
-npm run ci       # tsc --noEmit + lint + prettier
+pnpm run compile  # tsc --build (must run before backend compiles/tests)
+pnpm run test     # Vitest unit tests
+pnpm run ci       # tsc --noEmit + lint + prettier
 ```
 
 ## Architecture
@@ -258,7 +258,7 @@ Items from upgrade analyses that need monitoring or future action:
 - [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable release; no action until a newer version is published (carried from 2026-04-05)
 - [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 500+ open issues; healthy but bus-factor risk — monitor for succession or fork activity (carried from 2026-04-05)
 - [ ] **Azure Postgres Flexible Server at PG 17** — local dev runs PG 18; bump the `infra/azure` default when Azure adds PG 18 support.
-- [ ] **Next.js `/_global-error` / `/_not-found` prerender crashes** — upstream [vercel/next.js#87719](https://github.com/vercel/next.js/issues/87719). Root cause identified in thread comments: any project-level `NODE_ENV=development` (e.g. set in `.mise.toml [env]` → exported by `jdx/mise-action` into the CI job env) overrides Next.js's internal `NODE_ENV=production` during `next build`, which triggers the synthesized internal-route prerender crash. Fix: keep `NODE_ENV` unset at the project level — `next build` sets it to `production` automatically, `next dev` sets it to `development`. Compose files still set `NODE_ENV=development` per container for local dev; the project-wide env is not the place. Also keeping `app/global-error.tsx` + `app/not-found.tsx` as defensive good practice (valid prod error UX).
+- [x] **Next.js `/_global-error` / `/_not-found` prerender crashes** — fixed 2026-04-16 by removing `NODE_ENV=development` from `.mise.toml [env]` (jdx/mise-action was leaking it into CI job env, overriding `next build`'s internal `NODE_ENV=production`). User-defined `app/global-error.tsx` + `app/not-found.tsx` kept as defense-in-depth + prod error UX. Upstream [vercel/next.js#87719](https://github.com/vercel/next.js/issues/87719) still open; watch for regressions in future Next.js minors.
 
 ## Skills
 

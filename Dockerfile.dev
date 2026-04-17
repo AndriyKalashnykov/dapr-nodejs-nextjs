@@ -3,6 +3,5 @@ FROM microservice-build
 ENV NODE_ENV=development
 WORKDIR /workspace
 COPY /packages/@sos/sdk ./packages/@sos/sdk
-COPY package.json package-lock.json tsconfig.json .npmrc ./
-RUN npm install && npm run compile -w @sos/sdk
-
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json .npmrc ./
+RUN pnpm install --frozen-lockfile && pnpm --filter @sos/sdk run compile

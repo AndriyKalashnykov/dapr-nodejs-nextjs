@@ -1,10 +1,18 @@
 {
   "name": "demo-ts",
   "private": true,
-  "workspaces": ["packages/@sos/*", "app/*"],
+  "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "@playwright/test": "^1.48.0",
     "tsx": "4.21.0",
     "typescript": "6.0.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@scarf/scarf",
+      "esbuild",
+      "protobufjs",
+      "sharp"
+    ]
   }
 }
