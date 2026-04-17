@@ -26,7 +26,7 @@ node = "24"
 # Terraform — used by infra-validate and e2e-aca targets.
 terraform = "1.9.8"
 
-[env]
-# mise loads this into the shell when you `cd` into the repo, so test / dev
-# commands see sane defaults without a separate .env read.
-NODE_ENV = "development"
+# NOTE: do NOT set NODE_ENV here. Next.js `next build` sets NODE_ENV=production
+# internally; a project-level override leaks into the build and triggers the
+# `/_global-error` prerender crash (upstream vercel/next.js#87719). Let
+# `next dev` / `next build` manage it automatically.
