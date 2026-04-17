@@ -10,13 +10,18 @@ services:
     networks:
       - dapr-net
   # Dapr scheduler service (Jobs API / actor reminders, 1.14+)
+  # tmpfs mount (not a named volume): the scheduler image runs as uid 65532
+  # but named volumes land with root ownership on docker-compose, triggering
+  # `mkdir /var/run/dapr/scheduler: permission denied` on CI. Scheduler state
+  # is ephemeral for dev/test; tmpfs is in-memory, created with the
+  # container user's ownership, and loses nothing we care about on restart.
   scheduler:
     image: "docker.io/daprio/dapr:1.17.5@sha256:a30a5b9089b7635b636587379a7c2086017fe1559d3f096d3f10326fafa22313"
     command: ["./scheduler", "--port", "50006", "--etcd-data-dir", "/var/run/dapr/scheduler"]
     ports:
       - "50006:50006"
-    volumes:
-      - scheduler-data:/var/run/dapr/scheduler
+    tmpfs:
+      - /var/run/dapr/scheduler
     networks:
       - dapr-net
   # Dapr state and pubsub provider
@@ -57,6 +62,3 @@ services:
 networks:
   dapr-net: # here we set the network name
     driver: bridge
-
-volumes:
-  scheduler-data:
