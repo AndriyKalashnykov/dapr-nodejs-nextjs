@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 # Build context is the repo root.
-FROM docker.io/node:24-alpine@sha256:01743339035a5c3c11a373cd7c83aeab6ed1457b55da6a69e014a95ac4e4700b AS build
+FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS build
 ENV NODE_ENV=production
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /workspace
@@ -14,7 +14,7 @@ RUN pnpm --filter @sos/sdk run compile && \
     pnpm deploy --filter <%= name %> --prod /deploy
 
 # Runtime
-FROM docker.io/node:24-alpine@sha256:01743339035a5c3c11a373cd7c83aeab6ed1457b55da6a69e014a95ac4e4700b AS runtime
+FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 ENV NODE_ENV=production
 WORKDIR /app

@@ -3,7 +3,7 @@ name: demo-ts
 services:
   # Dapr placement service (actor placement)
   placement:
-    image: "docker.io/daprio/dapr:1.17.5@sha256:a30a5b9089b7635b636587379a7c2086017fe1559d3f096d3f10326fafa22313"
+    image: "docker.io/daprio/dapr:1.17.5@sha256:aad1f7dc9cfc3f6c4f92af513f5d0deca4576be236daba9b99f3c0d418189b70"
     command: ["./placement", "-port", "50005"]
     ports:
       - "50005:50005"
@@ -16,7 +16,7 @@ services:
   # is ephemeral for dev/test; tmpfs is in-memory, created with the
   # container user's ownership, and loses nothing we care about on restart.
   scheduler:
-    image: "docker.io/daprio/dapr:1.17.5@sha256:a30a5b9089b7635b636587379a7c2086017fe1559d3f096d3f10326fafa22313"
+    image: "docker.io/daprio/dapr:1.17.5@sha256:aad1f7dc9cfc3f6c4f92af513f5d0deca4576be236daba9b99f3c0d418189b70"
     command: ["./scheduler", "--port", "50006", "--etcd-data-dir", "/var/run/dapr/scheduler"]
     ports:
       - "50006:50006"
@@ -26,7 +26,7 @@ services:
       - dapr-net
   # Dapr state and pubsub provider
   redis:
-    image: "docker.io/redis:8-alpine@sha256:81b6f81d6a6c5b9019231a2e8eb10085e3a139a34f833dcc965a8a959b040b72"
+    image: "docker.io/redis:8-alpine@sha256:c5e375abb885e6b2021c0377879e4890bf76f9065b8922ffc113f2b226b9fc17"
     restart: always
     ports:
       - "6379:6379"
