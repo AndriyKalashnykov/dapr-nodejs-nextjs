@@ -60,7 +60,7 @@ make up                                   # start the full stack (Ctrl-C to stop
 |------|---------|---------|
 | [GNU Make](https://www.gnu.org/software/make/) | 3.81+ | Build orchestration |
 | [Git](https://git-scm.com/) | latest | Version control |
-| [mise](https://mise.jdx.dev/) | latest | Manages Node, Dapr CLI, act, hadolint, terraform (single source of truth: `.mise.toml`). Install: `curl https://mise.run \| sh` (Linux) or `brew install mise` (macOS) |
+| [mise](https://mise.jdx.dev/) | latest | Manages Node, pnpm, Dapr CLI, act, hadolint, terraform (single source of truth: `.mise.toml`). Install: `curl https://mise.run \| sh` (Linux) or `brew install mise` (macOS) |
 | [Podman](https://podman.io/docs/installation) | 4.9+ | Container runtime (Docker-compatible) with Compose |
 
 `make deps` runs `mise install` to fetch all mise-managed tools and installs podman + git via the OS package manager.
