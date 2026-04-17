@@ -41,10 +41,19 @@ services:
       - /workspace/app/backend-ts/node_modules # Persist docker containers modules so that localhost are not used
       - ./src:/workspace/app/backend-ts/src
     depends_on:
-      - redis
-      - placement
-      - zipkin
-      - postgres
+      redis:
+        condition: service_started
+      placement:
+        condition: service_started
+      zipkin:
+        condition: service_started
+      postgres:
+        condition: service_started
+      # Wait for the one-shot schema-init container to complete before
+      # running `knex migrate` — otherwise the `backend_ts` schema doesn't
+      # exist yet and migrate fails with "schema \"backend_ts\" does not exist".
+      postgres-build-dbs:
+        condition: service_completed_successfully
     restart: on-failure
     networks:
       - dapr-net
