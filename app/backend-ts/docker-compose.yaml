@@ -21,7 +21,12 @@ services:
       SECRETS_STORE_NAME: local-secretstore
       # SEED_DATA: true # Load seed data on start
       CHOKIDAR_USEPOLLING: true # Supports "tsx watch" for live reloading
-      DAPR_HOST: 0.0.0.0
+      # DAPR_HOST = dial target for the SDK's outbound calls to the sidecar.
+      # Must be localhost (sidecar is in the SAME network namespace via
+      # network_mode: service:backend-ts). Using 0.0.0.0 works on rootless
+      # Podman but fails on Docker Compose (CI), causing the
+      # DAPR_SIDECAR_COULD_NOT_BE_STARTED error.
+      DAPR_HOST: localhost
       DAPR_PORT: 3500
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 3001
