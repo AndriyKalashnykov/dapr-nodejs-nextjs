@@ -27,7 +27,7 @@ node = "24"
 "aqua:hadolint/hadolint" = "2.14.0"
 
 # Terraform — used by infra-validate and e2e-aca targets.
-terraform = "1.14.8"
+terraform = "1.14.9"
 
 # NOTE: do NOT set NODE_ENV here. Next.js `next build` sets NODE_ENV=production
 # internally; a project-level override leaks into the build and triggers the
