@@ -1,7 +1,7 @@
 {
   "name": "demo-ts",
   "private": true,
-  "packageManager": "pnpm@10.33.0",
+  "packageManager": "pnpm@10.33.2",
   "devDependencies": {
     "@playwright/test": "1.59.1",
     "tsx": "4.21.0",
