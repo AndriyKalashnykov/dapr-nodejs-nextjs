@@ -13,7 +13,8 @@ COPY public ./
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
-COPY --from=build /app /app
-COPY /src /app/src
+COPY --from=build --chown=node:node /app /app
+COPY --chown=node:node /src /app/src
+USER node
 EXPOSE 3001
 CMD [ "pnpm", "run", "dev" ]

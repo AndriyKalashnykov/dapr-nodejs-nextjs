@@ -1,4 +1,4 @@
-name: E2E (ACA)
+name: E2E ACA
 
 # Manual-only trigger. ACA deploys incur Azure cost (~$0.30–$1 per full run),
 # and a run takes 10–20 min. Do not wire to push/PR.
@@ -26,15 +26,17 @@ concurrency:
 
 jobs:
   e2e-aca:
-    name: Deploy to ACA, smoke, destroy
+    name: e2e-aca
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Every step in this job needs Azure auth (terraform/az/docker push to
+    # ACR), so the env block lives at job scope. Secrets + vars required
+    # in repo settings:
+    #   secrets.AZURE_CLIENT_ID        — AAD App (client) ID of the federated identity
+    #   secrets.AZURE_TENANT_ID        — AAD tenant ID
+    #   secrets.AZURE_SUBSCRIPTION_ID  — Target Azure subscription
+    #   secrets.JWT_SECRET_KEY         — seeded into Key Vault; must match smoke JWT
     env:
-      # Secrets + vars required in repo settings:
-      #   secrets.AZURE_CLIENT_ID        — AAD App (client) ID of the federated identity
-      #   secrets.AZURE_TENANT_ID        — AAD tenant ID
-      #   secrets.AZURE_SUBSCRIPTION_ID  — Target Azure subscription
-      #   secrets.JWT_SECRET_KEY         — seeded into Key Vault; must match smoke JWT
       TF_VAR_AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       TF_VAR_jwt_secret_key: ${{ secrets.JWT_SECRET_KEY }}
       ARM_USE_OIDC: 'true'
@@ -42,90 +44,92 @@ jobs:
       ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Azure login (OIDC)
+      - name: Log in to Azure (OIDC)
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
 
-      - name: Terraform init
-        working-directory: infra/azure
-        run: terraform init -input=false
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
 
-      - name: Ensure ACR exists (targeted apply)
-        working-directory: infra/azure
-        run: terraform apply -input=false -auto-approve -target=module.container_registry
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Provision ACR
+        run: make tf-apply-acr
 
       - name: Read ACR login server
         id: acr
-        working-directory: infra/azure
-        run: echo "server=$(terraform output -raw container_registry_login_server)" >> "$GITHUB_OUTPUT"
+        run: echo "server=$(make tf-acr-login-server)" >> "$GITHUB_OUTPUT"
 
-      - name: ACR docker login
+      - name: Log in to ACR
         run: az acr login --name "${ACR_NAME%%.*}"
         env:
           ACR_NAME: ${{ steps.acr.outputs.server }}
 
-      # Build-scan-push for each image. Trivy runs between build and push so
-      # a CRITICAL/HIGH CVE in the base image or a leaked secret blocks the
-      # deploy to real Azure infra. `ignore-unfixed: true` skips CVEs with
-      # no upstream fix available.
-      - name: Build backend-ts image
-        run: docker build -t "${ACR}/backend-ts:${GIT_SHA}" -f app/backend-ts/Dockerfile .
+      # Build-scan-push for each image. The local-load scan stage runs on
+      # `linux/amd64` only (buildx can `--load` a single arch into the
+      # local daemon). After the scan passes the multi-arch (amd64 + arm64)
+      # build re-runs with `--push` to ACR.
+      - name: Build backend-ts (scan stage)
+        run: make image-build-prod
         env:
-          ACR: ${{ steps.acr.outputs.server }}
-          GIT_SHA: ${{ github.sha }}
+          SERVICE: backend-ts
+          IMAGE_TAG: ${{ github.sha }}
 
-      - name: Trivy image scan — backend-ts
+      - name: Trivy image scan backend-ts
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ steps.acr.outputs.server }}/backend-ts:${{ github.sha }}
+          image-ref: backend-ts:${{ github.sha }}
           scanners: 'vuln,secret,misconfig'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
+          trivyignores: ./.trivyignore.yaml
 
-      - name: Push backend-ts image
-        run: docker push "${ACR}/backend-ts:${GIT_SHA}"
+      - name: Build and push backend-ts (multi-arch)
+        run: make image-push-multi-arch
         env:
-          ACR: ${{ steps.acr.outputs.server }}
-          GIT_SHA: ${{ github.sha }}
+          SERVICE: backend-ts
+          IMAGE_TAG: ${{ github.sha }}
+          REGISTRY: ${{ steps.acr.outputs.server }}
 
-      - name: Build web-nextjs image
-        run: docker build -t "${ACR}/web-nextjs:${GIT_SHA}" -f app/web-nextjs/Dockerfile app/web-nextjs
+      - name: Build web-nextjs (scan stage)
+        run: make image-build-prod
         env:
-          ACR: ${{ steps.acr.outputs.server }}
-          GIT_SHA: ${{ github.sha }}
+          SERVICE: web-nextjs
+          IMAGE_TAG: ${{ github.sha }}
 
-      - name: Trivy image scan — web-nextjs
+      - name: Trivy image scan web-nextjs
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ steps.acr.outputs.server }}/web-nextjs:${{ github.sha }}
+          image-ref: web-nextjs:${{ github.sha }}
           scanners: 'vuln,secret,misconfig'
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
+          trivyignores: ./.trivyignore.yaml
 
-      - name: Push web-nextjs image
-        run: docker push "${ACR}/web-nextjs:${GIT_SHA}"
+      - name: Build and push web-nextjs (multi-arch)
+        run: make image-push-multi-arch
         env:
-          ACR: ${{ steps.acr.outputs.server }}
-          GIT_SHA: ${{ github.sha }}
+          SERVICE: web-nextjs
+          IMAGE_TAG: ${{ github.sha }}
+          REGISTRY: ${{ steps.acr.outputs.server }}
 
       - name: Terraform apply
-        working-directory: infra/azure
-        run: |
-          terraform apply -input=false -auto-approve \
-            -var "backend_image_tag=${GIT_SHA}" \
-            -var "nextjs_image_tag=${GIT_SHA}"
+        run: make tf-apply
         env:
           GIT_SHA: ${{ github.sha }}
 
@@ -137,15 +141,11 @@ jobs:
 
       - name: Terraform destroy
         if: always() && inputs.keep_resources != 'true'
-        working-directory: infra/azure
-        run: |
-          terraform destroy -input=false -auto-approve \
-            -var "backend_image_tag=${GIT_SHA}" \
-            -var "nextjs_image_tag=${GIT_SHA}"
+        run: make tf-destroy
         env:
           GIT_SHA: ${{ github.sha }}
 
-      - name: Warn — resources kept
+      - name: Warn resources kept
         if: inputs.keep_resources == 'true'
         run: |
           echo "::warning title=Azure resources kept::Skipped terraform destroy per input. Remember to manually destroy or the cost accrues."

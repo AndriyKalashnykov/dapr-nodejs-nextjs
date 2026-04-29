@@ -81,14 +81,14 @@ wait_for() {
 echo "=== E2E smoke test ==="
 echo
 
-echo "[1/6] Waiting for services..."
+echo "[1/8] Waiting for services..."
 wait_for "Backend direct"        "http://localhost:${BACKEND_PORT}/docs" 90 || exit 1
 wait_for "Backend via Dapr"      "http://localhost:${DAPR_PORT}/v1.0/healthz" 90 || exit 1
 wait_for "Next.js SSR frontend"  "http://localhost:${NEXTJS_PORT}" 90 || exit 1
 wait_for "Grafana OTEL"          "http://localhost:${OTEL_PORT}"   120 || exit 1
 echo
 
-echo "[2/6] Service health probes..."
+echo "[2/8] Service health probes..."
 assert_http "Next.js SSR root"   "http://localhost:${NEXTJS_PORT}"         200
 assert_http "Swagger UI redirect" "http://localhost:${BACKEND_PORT}/docs"  301
 assert_http "Dapr Dashboard"     "http://localhost:${DASHBOARD_PORT}"      200
@@ -96,7 +96,7 @@ assert_http "Zipkin"             "http://localhost:${ZIPKIN_PORT}"         302
 assert_http "Grafana OTEL"       "http://localhost:${OTEL_PORT}"           200
 echo
 
-echo "[3/6] Dapr scheduler reachability..."
+echo "[3/8] Dapr scheduler reachability..."
 if nc -z -w 3 localhost "${SCHEDULER_PORT}" 2>/dev/null; then
   record PASS "Scheduler TCP ${SCHEDULER_PORT} reachable"
 else
@@ -104,7 +104,7 @@ else
 fi
 echo
 
-echo "[4/6] Auth / negative cases..."
+echo "[4/8] Auth / negative cases..."
 assert_http "Unauthenticated todos → 401" \
   "http://localhost:${BACKEND_PORT}/api/v1/todos" 401
 assert_http "Nonexistent todo → 404" \
@@ -112,7 +112,7 @@ assert_http "Nonexistent todo → 404" \
   404 GET "" "$(make_jwt)"
 echo
 
-echo "[5/6] Backend CRUD (direct)..."
+echo "[5/8] Backend CRUD (direct)..."
 TOKEN=$(make_jwt)
 assert_http "List todos (empty state ok)" \
   "http://localhost:${BACKEND_PORT}/api/v1/todos" 200 GET "" "$TOKEN"
@@ -138,7 +138,7 @@ if [[ -n "$TODO_ID" ]]; then
 fi
 echo
 
-echo "[6/6] Backend CRUD via Dapr sidecar..."
+echo "[6/8] Backend CRUD via Dapr sidecar..."
 DAPR_BASE="http://localhost:${DAPR_PORT}/v1.0/invoke/${BACKEND_APP_ID}/method"
 assert_json_field "List todos via sidecar has items field" \
   "${DAPR_BASE}/api/v1/todos" "items" "$TOKEN"
@@ -157,6 +157,38 @@ if echo "$CREATE_VIA_DAPR" | grep -q '"id"'; then
   fi
 else
   record FAIL "Create via Dapr sidecar — no id: ${CREATE_VIA_DAPR:0:120}"
+fi
+echo
+
+echo "[7/8] OpenTelemetry trace propagation (backend-ts → Zipkin)..."
+# By this point sections 5–6 have generated CRUD requests against backend-ts,
+# which the OTel SDK auto-instrumentation should have exported to Zipkin.
+# Allow a short window for the spans to flush before querying the API.
+sleep 3
+TRACES_URL="http://localhost:${ZIPKIN_PORT}/api/v2/traces?serviceName=backend-ts&limit=50"
+TRACE_COUNT=$(curl -sf --max-time 5 "$TRACES_URL" 2>/dev/null \
+  | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).length)}catch{console.log(0)}})" \
+  || echo 0)
+if [[ "$TRACE_COUNT" -gt 0 ]]; then
+  record PASS "Zipkin received ${TRACE_COUNT} backend-ts trace(s)"
+else
+  record FAIL "Zipkin returned 0 backend-ts traces (OTel pipeline likely broken)"
+fi
+echo
+
+echo "[8/8] Dapr pub/sub publish via sidecar..."
+# Verify the redis-pubsub component is wired by publishing a CloudEvent
+# directly through the Dapr sidecar's publish API. A 204 response means
+# the sidecar accepted the event and dispatched it to Redis.
+PUBSUB_URL="http://localhost:${DAPR_PORT}/v1.0/publish/redis-pubsub/todo-data"
+PUBSUB_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+  -X POST -H 'Content-Type: application/json' \
+  -d '{"event":"e2e-pubsub-probe"}' \
+  "$PUBSUB_URL" 2>/dev/null || echo '000')
+if [[ "$PUBSUB_STATUS" == "204" ]]; then
+  record PASS "Dapr publish to redis-pubsub/todo-data returned 204"
+else
+  record FAIL "Dapr publish to redis-pubsub/todo-data returned ${PUBSUB_STATUS} (expected 204)"
 fi
 echo
 

@@ -18,3 +18,10 @@ RUN if [ "$ADD_CERT" = "true" ]; then \
       npm config set cafile ${CERT_FILE_PATH} && \
       pnpm config set cafile ${CERT_FILE_PATH}; \
     else echo "No CA cert added."; fi
+
+# NOTE: this image is a *build-only* base for the monorepo — child
+# Dockerfiles inherit it (`microservice-sdk-build`, `microservice-build`)
+# and need root to install workspace packages. Each downstream runtime
+# Dockerfile drops to `USER node` before its CMD. The DS-0002 trivy
+# misconfig (no USER) is therefore suppressed in `.trivyignore` with
+# scoping rationale.

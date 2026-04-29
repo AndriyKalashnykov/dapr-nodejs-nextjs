@@ -17,6 +17,7 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 ENV NODE_ENV=production
 WORKDIR /app
 # hadolint ignore=DL3021
-COPY --from=build /workspace/app/<%= name %> /app
+COPY --from=build --chown=node:node /workspace/app/<%= name %> /app
+USER node
 EXPOSE 3001
 CMD [ "pnpm", "run", "start" ]

@@ -14,9 +14,18 @@
   "prHourlyLimit": 0,
   "platformAutomerge": true,
   "automerge": true,
-  "automergeType": "branch",
+  "automergeType": "pr",
   "automergeStrategy": "squash",
   "ignoreTests": false,
+  "enabledManagers": [
+    "npm",
+    "github-actions",
+    "dockerfile",
+    "docker-compose",
+    "terraform",
+    "mise",
+    "custom.regex"
+  ],
   "vulnerabilityAlerts": {
     "labels": [
       "security"
@@ -86,9 +95,16 @@
       "groupName": "React"
     },
     {
-      "description": "Group Dapr SDK updates",
+      "description": "Group Dapr SDK + CLI + sidecar/dashboard images so they ship in lockstep",
       "matchPackageNames": [
-        "@dapr/dapr"
+        "@dapr/dapr",
+        "dapr/cli",
+        "docker.io/daprio/dapr",
+        "docker.io/daprio/daprd",
+        "docker.io/daprio/dashboard",
+        "daprio/dapr",
+        "daprio/daprd",
+        "daprio/dashboard"
       ],
       "groupName": "Dapr SDK"
     },
@@ -125,80 +141,60 @@
       "groupName": "Docker base images"
     },
     {
-      "description": "Group Node.js version updates",
+      "description": "Group Node.js version updates (mise + dockerfile + docker-compose)",
       "matchPackageNames": [
         "node"
       ],
       "matchManagers": [
         "dockerfile",
         "docker-compose",
-        "nvm",
-        "nodenv"
+        "mise"
       ],
       "groupName": "Node.js"
     },
     {
-      "description": "Group Makefile tool version updates",
+      "description": "Group Makefile inline `# renovate:` tool versions",
       "matchManagers": [
         "custom.regex"
       ],
+      "matchFileNames": [
+        "Makefile"
+      ],
       "groupName": "Makefile tools"
+    },
+    {
+      "description": "Group .mise.toml inline `# renovate:` tool versions",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchFileNames": [
+        ".mise.toml"
+      ],
+      "groupName": "mise tools"
     }
   ],
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Track nvm version in Makefile",
-      "managerFilePatterns": ["/^Makefile$/"],
-      "matchStrings": [
-        "NVM_VERSION\\s*:=\\s*(?<currentValue>.*?)\\n"
+      "description": "Generic Makefile tool version manager — matches any `# renovate: ...` comment above a `NAME_VERSION := value` assignment",
+      "managerFilePatterns": [
+        "/^Makefile$/"
       ],
-      "depNameTemplate": "nvm-sh/nvm",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.*)$"
+      "matchStrings": [
+        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n[A-Z_]+_VERSION\\s*:=\\s*(?<currentValue>\\S+)"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver-coerced{{/if}}"
     },
     {
       "customType": "regex",
-      "description": "Track Node.js version in Makefile",
-      "managerFilePatterns": ["/^Makefile$/"],
-      "matchStrings": [
-        "NODE_VERSION\\s*:=\\s*(?<currentValue>.*?)\\n"
+      "description": "Generic .mise.toml tool version manager — matches `# renovate: ...` comment above an `\"aqua:owner/repo\" = \"X.Y.Z\"` entry",
+      "managerFilePatterns": [
+        "/^\\.mise\\.toml$/"
       ],
-      "depNameTemplate": "node",
-      "datasourceTemplate": "node-version"
-    },
-    {
-      "customType": "regex",
-      "description": "Track act version in Makefile",
-      "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
-        "ACT_VERSION\\s*:=\\s*(?<currentValue>.*?)\\n"
+        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n\\s*\"[^\"]+\"\\s*=\\s*\"(?<currentValue>[^\"]+)\""
       ],
-      "depNameTemplate": "nektos/act",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.*)$"
-    },
-    {
-      "customType": "regex",
-      "description": "Track Dapr CLI version in Makefile",
-      "managerFilePatterns": ["/^Makefile$/"],
-      "matchStrings": [
-        "DAPR_VERSION\\s*:=\\s*(?<currentValue>.*?)\\n"
-      ],
-      "depNameTemplate": "dapr/cli",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.*)$"
-    },
-    {
-      "customType": "regex",
-      "description": "Track hadolint version in Makefile",
-      "managerFilePatterns": ["/^Makefile$/"],
-      "matchStrings": [
-        "HADOLINT_VERSION\\s*:=\\s*(?<currentValue>.*?)\\n"
-      ],
-      "depNameTemplate": "hadolint/hadolint",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.*)$"
+      "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver-coerced{{/if}}"
     }
   ]
 }

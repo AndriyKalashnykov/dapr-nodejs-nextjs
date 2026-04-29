@@ -18,7 +18,8 @@ C4Context
         Container(backend, "backend-ts", "Express 5 + Dapr sidecar", "REST API at /api/v1/todos, publishes todo-data")
         ContainerDb(postgres, "PostgreSQL 18", "Database", "backend_ts schema")
         ContainerDb(redis, "Redis 8", "State + pub/sub", "read-through cache, todo-data topic")
-        Container_Ext(zipkin, "Zipkin", "Tracing", "OpenTelemetry traces from both services")
+        Container(zipkin, "Zipkin", "Tracing", "OpenTelemetry traces from both services")
+        Container(otel, "Grafana OTEL stack", "OTel collector + Loki + Tempo + Mimir", "Optional observability stack (`make up-otel`)")
     }
 
     Rel(user, nextjs, "HTTPS", "browser")
@@ -27,6 +28,10 @@ C4Context
     Rel(backend, redis, "Dapr state + pubsub")
     Rel(nextjs, zipkin, "OTLP")
     Rel(backend, zipkin, "OTLP")
+    Rel(nextjs, otel, "OTLP", "logs + metrics + traces")
+    Rel(backend, otel, "OTLP", "logs + metrics + traces")
+
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
 ```
 
 ## Tech Stack
@@ -122,10 +127,11 @@ make up             # Bring up the full stack (Ctrl-C to stop)
 #   unit (seconds, no containers)
 make test              # Vitest unit tests — SDK + backend + web-nextjs
 make lint              # Lint + typecheck across all workspaces
-make ci                # Full local CI (lint + vulncheck + test + build)
+make static-check      # Composite quality gate (lint + vulncheck + secrets + trivy-fs + mermaid-lint)
+make ci                # Full local CI (static-check + test + build)
 
 #   integration (tens of seconds, needs Postgres + Dapr sidecar)
-make test-integration  # Backend integration tests (real DB + real sidecar)
+make integration-test  # Backend integration tests (real DB + real sidecar)
 
 #   e2e (minutes, full compose stack)
 make e2e               # `make up -d` + e2e/e2e-test.sh + `make down`
@@ -224,7 +230,7 @@ The matching workflow (`.github/workflows/e2e-aca.yml`) runs on `workflow_dispat
 flowchart TB
     user[End user / Browser]
     subgraph rg["Azure Resource Group"]
-        subgraph vnet["Virtual Network (10.0.0.0/16)"]
+        subgraph vnet["Virtual Network"]
             subgraph aca_env["ACA Managed Environment"]
                 nextjs_aca[web-nextjs Container App<br/>external ingress :3000<br/>Dapr sidecar :3500]
                 backend_aca[backend-ts Container App<br/>external ingress :3001<br/>Dapr sidecar :3500]
@@ -271,6 +277,8 @@ Run `make help` to see all targets.
 | `make help` | List available tasks |
 | `make deps` | Check and install required dependencies (node, pnpm, podman, dapr, git) |
 | `make deps-check` | Print installed tool versions |
+| `make deps-prune` | Report unused dependencies via `depcheck` (per workspace) |
+| `make deps-prune-check` | Fail if any workspace has unused dependencies (CI gate) |
 | `make install` | Install pnpm dependencies |
 | `make clean` | Remove build artifacts and node_modules |
 | `make setup` | Build base Docker images (run once after clone) |
@@ -295,10 +303,15 @@ Run `make help` to see all targets.
 | Target | Description |
 |--------|-------------|
 | `make format` | Auto-format code with Prettier across all workspaces |
-| `make lint` | Run lint and typecheck across all workspaces |
-| `make vulncheck` | Run pnpm audit for known vulnerabilities |
+| `make lint` | Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate, mermaid) |
+| `make lint-scripts-exec` | Fail if any tracked shell script under `scripts/` is missing the executable bit |
+| `make vulncheck` | Run pnpm audit for known vulnerabilities (fails on moderate+) |
+| `make secrets` | Scan repo for committed secrets via `gitleaks` |
+| `make trivy-fs` | Trivy filesystem scan — CVEs + secrets + Dockerfile misconfigs (CRITICAL,HIGH) |
+| `make static-check` | Composite quality gate: `lint` + `vulncheck` + `secrets` + `trivy-fs` + `mermaid-lint` |
 | `make test` | Run unit tests across SDK and backend |
-| `make test-integration` | Run backend integration tests (requires Postgres + Dapr sidecar) |
+| `make integration-test` | Run backend integration tests (requires Postgres + Dapr sidecar) |
+| `make test-integration` | Deprecated alias for `integration-test` |
 | `make migrate` | Run pending database migrations in running backend-ts container |
 | `SERVICE=backend-ts make debug` | Start a service in debug mode (Node inspector on :9229) |
 | `SERVICE=backend-ts make terminal` | Open a shell in a running service container |
@@ -338,7 +351,7 @@ Run `make help` to see all targets.
 
 | Target | Description |
 |--------|-------------|
-| `make ci` | Run full CI pipeline locally (lint + vulncheck + test + build) |
+| `make ci` | Run full CI pipeline locally (`static-check` + `test` + `build`) |
 | `make ci-run` | Run GitHub Actions workflow locally using [act](https://github.com/nektos/act) |
 | `make check-version` | Ensure VERSION variable is set and follows semver (vX.Y.Z) |
 | `make release VERSION=v1.0.0` | Create and push a release tag |
@@ -366,13 +379,16 @@ GitHub Actions runs on every push to `main`, tags `v*`, and pull requests.
 
 | Job | Triggers | Steps |
 |-----|----------|-------|
-| **sdk** | push, PR, tags | Compile, lint & test SDK; upload build artifact |
-| **backend-ci** | after sdk | Lint & typecheck backend |
-| **backend-unit** | after sdk + backend-ci | Unit tests with coverage |
-| **backend-integration** | after sdk + backend-ci | Integration tests with Postgres + Dapr sidecar |
-| **web-nextjs** | push, PR, tags | Lint, test & build Next.js SSR frontend |
-| **e2e** | after backend-integration + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`) |
-| **ci-pass** | after all above | Gate job — fails if any of the above failed |
+| **changes** | push, PR, tags | Detect code changes (skips heavy jobs on docs-only PRs via [`dorny/paths-filter`](https://github.com/dorny/paths-filter)) |
+| **build** | after changes | Compile SDK, lint & test SDK, upload `sdk-build` artifact |
+| **static-check** | after build | Composite gate: `make static-check` (lint + vulncheck + gitleaks + Trivy fs scan + mermaid-lint) |
+| **test** | after build | Unit tests across SDK + backend (with coverage) |
+| **integration-test** | after build | Backend integration tests with Postgres service + Dapr sidecar |
+| **web-nextjs** | after changes | Lint, test & build Next.js SSR frontend |
+| **e2e** | after integration-test + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`) |
+| **ci-pass** | after all above | Gate job — fails if any required job failed or was cancelled |
+
+The `changes` detector keeps doc-only changes from running heavy jobs while still triggering the workflow (so Repository Rulesets gating on `ci-pass` are satisfied).
 
 [Renovate](https://docs.renovatebot.com/) keeps dependencies up to date with platform automerge enabled.
 
@@ -389,13 +405,22 @@ The `ci.yml` workflow needs no secrets — all jobs run with the default `GITHUB
 
 Set secrets via **Settings → Secrets and variables → Actions → New repository secret**. OIDC federation setup (no long-lived SP secret) is documented in [docs/deploy-aca.md](./docs/deploy-aca.md).
 
-### Image supply-chain gates
+### Supply-chain gates
 
-The `e2e-aca` workflow runs Trivy image scan between `docker build` and `docker push` for both `backend-ts` and `web-nextjs`. A CRITICAL or HIGH CVE in the base image, a leaked secret, or a Dockerfile misconfiguration blocks the push — no vulnerable image ships to ACR or gets deployed to ACA.
+`make static-check` (run by the `static-check` CI job on every push and PR) bundles:
 
 | Gate | Catches | Tool |
 |---|---|---|
-| Trivy image scan (CRITICAL/HIGH blocking) | Base-image CVEs, secrets in layers, Dockerfile misconfigs | `aquasecurity/trivy-action` with `image-ref:` |
+| `lint` | Code style, type errors, Dockerfile lints, `scripts/*.sh` missing +x bit, broken Mermaid diagrams | ESLint, `tsc --noEmit`, Prettier, hadolint, `mermaid-cli` |
+| `vulncheck` | Known npm CVEs (moderate+) | `pnpm audit` |
+| `secrets` | Committed credentials | [gitleaks](https://github.com/gitleaks/gitleaks) — config in `.gitleaks.toml` |
+| `trivy-fs` | Filesystem CVEs, secrets, Dockerfile misconfigs (CRITICAL,HIGH) | [Trivy](https://github.com/aquasecurity/trivy) — allowlist in `.trivyignore` |
+
+Image scans on top of that are gated on the manual `e2e-aca` workflow:
+
+| Gate | Catches | Tool |
+|---|---|---|
+| Trivy image scan (CRITICAL/HIGH blocking) | Base-image CVEs, secrets in layers, Dockerfile misconfigs | `aquasecurity/trivy-action` with `image-ref:` between `docker build` and `docker push` |
 
 `ignore-unfixed: true` skips CVEs with no upstream fix available. Cosign signing, multi-arch, and buildkit attestations are deliberately omitted — the images are ephemeral (destroyed by `terraform destroy` at the end of each run), only consumed by the project's own ACA deploy, and only run on `amd64`.
 
@@ -405,6 +430,7 @@ Contributions welcome — open a PR. Before pushing, run `make ci` for the fast 
 
 ## Further reading
 
+- [Architecture Decision Records](./docs/adr/README.md) — Dapr sidecar, ACA target, Redis broker
 - [Deploy to Azure Container Apps](./docs/deploy-aca.md)
 - [Create a new service](./docs/create-new-service.md)
 - [Setup an Azure Sandbox VM (for running local stack in the cloud)](./docs/setup-azure-sandbox.md)

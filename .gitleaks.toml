@@ -1,0 +1,23 @@
+# gitleaks config — see https://github.com/gitleaks/gitleaks#configuration
+#
+# Extends the default ruleset and adds path-based allowlists for known
+# false-positive sources in this repo:
+#   - Next.js build artifacts (.next/) — generated, not source
+#   - Test fixtures — JWTs forged with the well-known dev secret "secret"
+#   - Scaffolds — copies of those test fixtures used as scaffold templates
+#   - Documentation — example commands showing curl + sample JWTs
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project-specific allowlist"
+paths = [
+  '''(.*/)?\.next/.*''',
+  '''(.*/)?node_modules/.*''',
+  '''.*\.test\.ts$''',
+  '''.*\.integration\.test\.ts$''',
+  '''.*\.spec\.ts$''',
+  '''^scaffolds/.*''',
+  '''^docs/setup-azure-sandbox\.md$''',
+]

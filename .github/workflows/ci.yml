@@ -4,50 +4,68 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-    paths-ignore:
-      - '*.md'
-      - '!CLAUDE.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.claudeignore'
-      - '.claude/**'
-      - '**.png'
-      - '**.jpg'
-      - '**.gif'
-      - '**.svg'
   pull_request:
-    paths-ignore:
-      - '*.md'
-      - '!CLAUDE.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.claudeignore'
-      - '.claude/**'
-      - '**.png'
-      - '**.jpg'
-      - '**.gif'
-      - '**.svg'
   workflow_call:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ── Shared SDK ────────────────────────────────────────────────────────────────
-  sdk:
-    name: SDK compile, lint and test
+  # ── Path filter ────────────────────────────────────────────────────────────
+  # Detect whether the change touches code (vs. docs-only). Heavy jobs gate on
+  # `needs.changes.outputs.code == 'true'` so doc-only PRs skip the build/test
+  # matrix entirely while still passing the `ci-pass` gate (Repository Rulesets
+  # require the workflow to RUN, not just to be skipped — see `/ci-workflow`
+  # skill, "Path-Filter Strategy").
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Detect code changes
+        id: filter
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!**.md'
+              - 'CLAUDE.md'
+              - '!docs/**'
+              - '!specs/**'
+              - '!LICENSE'
+              - '!.gitignore'
+              - '!.claudeignore'
+              - '!.claude/**'
+              - '!benchmarks/**'
+              - '!**.png'
+              - '!**.jpg'
+              - '!**.gif'
+              - '!**.svg'
+
+  # ── Build (SDK compile + lint + test → upload artifact) ────────────────────
+  build:
+    name: build
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
@@ -55,33 +73,38 @@ jobs:
       - name: Resolve pnpm store path
         run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ env.PNPM_STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Compile, lint & test
+      - name: Build SDK
         run: make sdk-ci
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - name: Upload SDK build artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         continue-on-error: true
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
           retention-days: 1
 
-  # ── Backend ───────────────────────────────────────────────────────────────────
-  backend-ci:
-    name: Backend lint and typecheck
-    needs: sdk
+  # ── Static check (lint + vulncheck + secrets + trivy-fs + mermaid-lint) ────
+  static-check:
+    name: static-check
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
@@ -89,30 +112,36 @@ jobs:
       - name: Resolve pnpm store path
         run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ env.PNPM_STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Download SDK build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      - name: Lint & typecheck
-        run: make backend-lint
+      - name: Static check
+        run: make static-check
 
-  backend-unit:
-    name: Backend unit tests
-    needs: [sdk, backend-ci]
+  # ── Unit tests (backend) ───────────────────────────────────────────────────
+  test:
+    name: test
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
@@ -120,26 +149,30 @@ jobs:
       - name: Resolve pnpm store path
         run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ env.PNPM_STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Download SDK build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      - name: Unit tests
+      - name: Run unit tests
         run: make backend-test
         env:
           SERVICE_NAME: backend-ts
 
-  backend-integration:
-    name: Backend integration tests
-    needs: [sdk, backend-ci]
+  # ── Integration tests (backend + Postgres + Dapr sidecar) ──────────────────
+  integration-test:
+    name: integration-test
+    needs: [changes, build]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -156,9 +189,11 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
@@ -166,78 +201,32 @@ jobs:
       - name: Resolve pnpm store path
         run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ env.PNPM_STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Download SDK build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      - name: Install Dapr CLI
+      - name: Set up Dapr CLI
         uses: dapr/setup-dapr@8d980918fd43a2765c143ce7f687665b2d46a6b9 # v2
         with:
           version: '1.17.0'
 
-      - name: Initialize Dapr (slim – no Docker needed)
-        run: dapr init --slim
+      - name: Bring up Dapr sidecar
+        run: make ci-dapr-up
 
-      # buildServiceContext() calls Secrets.get() → Dapr local-secretstore → this file
-      - name: Configure Dapr local secretstore
-        run: |
-          mkdir -p "$HOME/.dapr/components"
+      - name: Prepare test schema
+        run: make ci-db-prepare
 
-          cat > "$HOME/.dapr/components/local-secretstore.yaml" <<'EOF'
-          apiVersion: dapr.io/v1alpha1
-          kind: Component
-          metadata:
-            name: local-secretstore
-          spec:
-            type: secretstores.local.file
-            version: v1
-            metadata:
-              - name: secretsFile
-                value: /home/runner/.dapr/secrets.json
-              - name: nestedSeparator
-                value: ':'
-              - name: multiValued
-                value: 'true'
-          EOF
-
-          cat > "$HOME/.dapr/secrets.json" <<'EOF'
-          {
-            "serviceSecrets": {
-              "JWT_SECRET": "secret",
-              "DB_USER": "postgres",
-              "DB_PASSWORD": "postgres"
-            }
-          }
-          EOF
-
-      - name: Start Dapr sidecar
-        run: |
-          export PATH="$HOME/.dapr/bin:$PATH"
-          daprd \
-            --app-id backend-ts \
-            --dapr-http-port 3500 \
-            --resources-path "$HOME/.dapr/components" \
-            --log-level error \
-            > /tmp/daprd.log 2>&1 &
-          echo "Waiting for Dapr sidecar on :3500..."
-          timeout 30 bash -c \
-            'until curl -sf http://localhost:3500/v1.0/healthz > /dev/null; do sleep 1; done' \
-            || { echo "=== daprd log ==="; cat /tmp/daprd.log; exit 1; }
-
-      - name: Create test schema
-        run: psql -h localhost -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;"
-        env:
-          PGPASSWORD: postgres
-
-      - name: Integration tests
+      - name: Run integration tests
         run: make backend-test-integration
         env:
           NODE_ENV: test
@@ -250,15 +239,19 @@ jobs:
           DAPR_HOST: localhost
           DAPR_PORT: '3500'
 
-  # ── Frontends ─────────────────────────────────────────────────────────────────
+  # ── Web (Next.js lint + test + production build) ───────────────────────────
   web-nextjs:
-    name: Web Next.js lint, test and build
+    name: web-nextjs
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
@@ -266,26 +259,30 @@ jobs:
       - name: Resolve pnpm store path
         run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ env.PNPM_STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Lint & build
+      - name: Lint, test and build
         run: make web-nextjs-ci
 
-  # ── E2E ───────────────────────────────────────────────────────────────────
+  # ── E2E (full stack via docker compose) ────────────────────────────────────
   e2e:
-    name: E2E full-stack smoke test
-    needs: [backend-integration, web-nextjs]
+    name: e2e
+    needs: [changes, integration-test, web-nextjs]
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
           cache: true
@@ -293,14 +290,16 @@ jobs:
       - name: Resolve pnpm store path
         run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ${{ env.PNPM_STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - name: Download SDK build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -308,7 +307,7 @@ jobs:
       # The e2e smoke script uses `node -e "require('jsonwebtoken')..."` to
       # forge a dev JWT. Install workspace deps on the runner so the require
       # resolves (containers have their own node_modules; the runner doesn't).
-      - name: Install workspace dependencies for e2e script
+      - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build microservice base images
@@ -322,7 +321,7 @@ jobs:
       - name: Start stack
         run: docker compose up -d
 
-      - name: Run e2e smoke test
+      - name: Run end-to-end tests
         run: bash e2e/e2e-test.sh
 
       - name: Dump container logs on failure
@@ -333,14 +332,59 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  # ── Docker (build + Trivy scan, no push) ───────────────────────────────────
+  # Builds the production Dockerfiles and scans the resulting images on every
+  # push. Catches base-image CVEs, Dockerfile misconfigurations, and secret
+  # leaks BEFORE they ship via the manual `e2e-aca` deploy. Images are not
+  # pushed anywhere — actual registry pushes happen in `e2e-aca.yml`.
+  docker:
+    name: docker
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend-ts, web-nextjs]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          install: true
+          cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Build production image
+        run: make image-build-prod
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ github.sha }}
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ matrix.service }}:${{ github.sha }}
+          scanners: 'vuln,secret,misconfig'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: ./.trivyignore.yaml
+
   # ── Gate ───────────────────────────────────────────────────────────────────
   ci-pass:
+    name: ci-pass
     if: always()
-    needs: [sdk, backend-ci, backend-unit, backend-integration, web-nextjs, e2e]
+    needs: [changes, build, static-check, test, integration-test, web-nextjs, e2e, docker]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check results
+      - name: Verify all jobs passed
         run: |
           if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
             echo "One or more jobs failed or were cancelled"

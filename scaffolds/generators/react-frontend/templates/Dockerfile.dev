@@ -11,7 +11,8 @@ COPY public .
 # Run
 FROM microservice-build
 WORKDIR /app
-COPY --from=build /app /app
-COPY /src /app/src
+COPY --from=build --chown=node:node /app /app
+COPY --chown=node:node /src /app/src
+USER node
 EXPOSE 3001
 CMD [ "pnpm", "run", "dev" ]
