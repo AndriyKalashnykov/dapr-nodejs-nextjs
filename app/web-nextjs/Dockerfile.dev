@@ -13,8 +13,12 @@ COPY public ./
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 WORKDIR /app
-COPY --from=build --chown=node:node /app /app
-COPY --chown=node:node /src /app/src
-USER node
+COPY --from=build /app /app
+COPY /src /app/src
 EXPOSE 3001
+# Dev-only image: docker-compose bind-mounts ./src and `next dev` writes
+# `.next/` cache into the working directory. With `USER node`, host
+# UID/GID mismatch on the bind mount causes EACCES. The DS-0002 trivy
+# finding is suppressed for this file in `.trivyignore.yaml` — the prod
+# runtime image (`Dockerfile`) does run as `node`.
 CMD [ "pnpm", "run", "dev" ]

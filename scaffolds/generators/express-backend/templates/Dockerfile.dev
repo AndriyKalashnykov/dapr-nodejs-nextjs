@@ -11,12 +11,11 @@ RUN pnpm install
 FROM microservice-sdk-build
 WORKDIR /workspace/app/<%= name %>
 # hadolint ignore=DL3021
-COPY --from=build --chown=node:node /workspace/app/<%= name %> /workspace/app/<%= name %>
+COPY --from=build /workspace/app/<%= name %> /workspace/app/<%= name %>
 # hadolint ignore=DL3021
-COPY --from=build --chown=node:node /workspace/node_modules /workspace/node_modules
+COPY --from=build /workspace/node_modules /workspace/node_modules
 # hadolint ignore=DL3021
-COPY --chown=node:node /src /workspace/app/<%= name %>/src
-USER node
+COPY /src /workspace/app/<%= name %>/src
 EXPOSE 3001
 WORKDIR /workspace
 CMD [ "pnpm", "--filter", "<%= name %>", "run", "dev" ]

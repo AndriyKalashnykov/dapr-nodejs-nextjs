@@ -5,15 +5,23 @@
 
 misconfigurations:
   # DS-0002: "Image user should not be 'root'"
-  #   The two scoped paths below are *build-only* intermediate base images —
-  #   downstream Dockerfile.dev's inherit from them and need root for
-  #   workspace pnpm installs, then drop to USER node before their CMD.
-  #   Adding USER here would break the dev container path. Every runtime
-  #   Dockerfile in the repo now declares USER explicitly.
+  #   Every PRODUCTION Dockerfile in the repo declares `USER node`. The
+  #   paths suppressed below are dev/build-only and never deployed:
+  #     - shared/microservice/Dockerfile + Dockerfile.dev are build-stage
+  #       intermediate bases that need root for monorepo pnpm installs.
+  #     - app/*/Dockerfile.dev's bind-mount ./src from the host via
+  #       docker-compose; running as `node` (UID 1000) inside the container
+  #       hits EACCES on the bind-mounted volume because host file owner
+  #       UIDs don't always match.
   - id: DS-0002
     paths:
       - "shared/microservice/Dockerfile"
       - "Dockerfile.dev"
+      - "app/backend-ts/Dockerfile.dev"
+      - "app/web-nextjs/Dockerfile.dev"
+      - "scaffolds/generators/express-backend/templates/Dockerfile.dev"
+      - "scaffolds/generators/nextjs-frontend/templates/Dockerfile.dev"
+      - "scaffolds/generators/react-frontend/templates/Dockerfile.dev"
 
   # DS-0011: "COPY with more than two arguments not ending with slash"
   #   Only triggers in scaffolds/ templates because of {{placeholder}} tokens
