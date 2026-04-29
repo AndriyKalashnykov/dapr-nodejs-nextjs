@@ -10,3 +10,26 @@ coverage/
 .vscode/
 .idea/
 *.log
+
+# Dev-only Dockerfiles must not land in the production runtime image —
+# `pnpm deploy` copies the workspace tree, so without this exclusion
+# Trivy scans the dev Dockerfile inside the published image and (correctly)
+# flags it for missing USER. The production `Dockerfile` itself is not
+# excluded because docker only consults `.dockerignore` for COPY/ADD;
+# the `-f` Dockerfile path is read separately.
+**/Dockerfile.dev
+**/Dockerfile.test
+
+# Trivy / gitleaks config files
+.trivyignore*
+.gitleaks.toml
+
+# CI fixtures
+scripts/ci-dapr/
+
+# E2E and tests aren't needed at runtime
+e2e/
+
+# IDE / editor noise
+*.swp
+.DS_Store
