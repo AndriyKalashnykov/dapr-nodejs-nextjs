@@ -7,27 +7,53 @@
 # To update a version: edit here, then `make deps`. CI auto-syncs via
 # jdx/mise-action reading this file.
 #
+# Renovate tracks every entry below — see `customManagers` in renovate.json
+# (managerFilePatterns: `.mise.toml`). Keep one tool per line and a
+# `# renovate:` comment on the line *above* the entry.
+#
 # mise docs: https://mise.jdx.dev/
 
 [tools]
-# JavaScript runtime (replaces Makefile NVM_VERSION / NODE_VERSION).
+# JavaScript runtime. Tracked natively by Renovate's `mise` manager (no
+# annotation needed for the `node` short-name).
 node = "24"
 
 # pnpm — mandatory package manager for this repo (per /makefile skill).
+# renovate: datasource=github-releases depName=pnpm/pnpm
 "aqua:pnpm/pnpm" = "10"
 
 # Dapr CLI — pinned to keep compose sidecar / CLI lockstep with Azure infra
 # and with CI steps that `dapr run`.
+# renovate: datasource=github-releases depName=dapr/cli
 "aqua:dapr/cli" = "1.17.1"
 
 # Local GitHub Actions runner (for `make ci-run`).
+# renovate: datasource=github-releases depName=nektos/act
 "aqua:nektos/act" = "0.2.87"
 
 # Dockerfile lint (wired into `make lint`).
+# renovate: datasource=github-releases depName=hadolint/hadolint
 "aqua:hadolint/hadolint" = "2.14.0"
 
-# Terraform — used by infra-validate and e2e-aca targets.
+# Terraform — used by infra-validate and e2e-aca targets. Tracked natively
+# by Renovate's `mise` manager (no annotation needed for the `terraform`
+# short-name).
 terraform = "1.14.9"
+
+# Terraform lint — used by infra-validate. Replaces inline `docker run
+# ghcr.io/terraform-linters/tflint:latest` (banned `:latest` + no Renovate
+# tracking).
+# renovate: datasource=github-releases depName=terraform-linters/tflint
+"aqua:terraform-linters/tflint" = "0.62.0"
+
+# Secret scanner — wired into `make secrets` (part of `make static-check`).
+# renovate: datasource=github-releases depName=gitleaks/gitleaks
+"aqua:gitleaks/gitleaks" = "8.30.1"
+
+# Filesystem CVE / secret / misconfig scanner — wired into `make trivy-fs`
+# (part of `make static-check`). Replaces ad-hoc Docker scans.
+# renovate: datasource=github-releases depName=aquasecurity/trivy
+"aqua:aquasecurity/trivy" = "0.70.0"
 
 # NOTE: do NOT set NODE_ENV here. Next.js `next build` sets NODE_ENV=production
 # internally; a project-level override leaks into the build and triggers the

@@ -15,4 +15,10 @@ COPY --from=build /workspace/node_modules /workspace/node_modules
 COPY /src /workspace/app/backend-ts/src
 EXPOSE 3001
 WORKDIR /workspace
+# This is a dev-only image: docker-compose bind-mounts ./src and the
+# application writes generated artifacts (OpenAPI spec) back into that
+# tree at startup. With `USER node`, host UID/GID mismatch on the bind
+# mount causes EACCES. The DS-0002 trivy finding is suppressed for this
+# file in `.trivyignore.yaml` — the prod runtime image (`Dockerfile`)
+# does run as `node`.
 CMD [ "pnpm", "--filter", "backend-ts", "run", "dev" ]

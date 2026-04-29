@@ -35,12 +35,16 @@ make build          # Build all service containers
 make compile        # Compile SDK + backend TypeScript
 
 # Test (no containers needed)
-make lint           # Lint + typecheck across all workspaces
+make lint           # Lint + typecheck (also: hadolint, scripts +x, terraform validate, mermaid)
+make vulncheck      # pnpm audit (fails on moderate+)
+make secrets        # gitleaks scan
+make trivy-fs       # Trivy filesystem CVE/secret/misconfig scan
+make static-check   # Composite gate — lint + vulncheck + secrets + trivy-fs + mermaid-lint
 make test           # Unit tests across SDK + backend (with coverage)
-make ci             # Full CI pipeline locally (lint + test + build)
+make ci             # Full CI pipeline locally (static-check + test + build)
 
 # Test (containers needed)
-make test-integration # Backend integration tests (requires Postgres + Dapr)
+make integration-test # Backend integration tests (requires Postgres + Dapr)
 make e2e              # End-to-end smoke test — `make up -d` + e2e/e2e-test.sh + `make down`
 make e2e-browser      # Playwright browser tests against a running stack
 make e2e-aca          # Deploy to Azure Container Apps + smoke + destroy (INCURS AZURE COST — see docs/deploy-aca.md)
@@ -178,11 +182,15 @@ Each backend feature follows a strict three-layer architecture:
 - Test helpers: `getAuthHeader()` generates JWT tokens, `expectApiDataResponse()`/`expectApiError()` for assertions
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
-Each CI job calls a dedicated Makefile target (`make sdk-ci`, `make backend-lint`, etc.). SDK compiles first and its `build/` artifact is shared with downstream jobs:
-1. **SDK** (`make sdk-ci`): compile → lint → unit tests → upload `sdk-build` artifact
-2. **Backend** (parallel, depends on SDK): `make backend-lint`, `make backend-test`, `make backend-test-integration` (with Postgres service + Dapr sidecar)
-3. **Frontend** (parallel, no SDK dependency): `make web-nextjs-ci` (lint + Vitest + build)
-4. **E2E** (depends on backend-integration + web-nextjs): builds service images, `docker compose up -d`, runs `e2e/e2e-test.sh`
+Each CI job delegates to a Makefile target. The `changes` detector (using `dorny/paths-filter`) gates heavy jobs so doc-only PRs skip the build/test matrix while still triggering the workflow (Repository Rulesets gating on `ci-pass` are satisfied either way). Job order:
+1. **changes**: detect whether the PR touches code (vs. docs/images only)
+2. **build** (`make sdk-ci`): compile + lint + unit-test the SDK; upload `sdk-build` artifact
+3. **static-check** (`make static-check`, depends on build): composite gate — `lint` + `vulncheck` + `secrets` (gitleaks) + `trivy-fs` + `mermaid-lint`
+4. **test** (`make backend-test`, depends on build): backend unit tests with coverage
+5. **integration-test** (`make backend-test-integration`, depends on build): Postgres service + Dapr sidecar, real DB, real Dapr
+6. **web-nextjs** (`make web-nextjs-ci`, depends on changes): lint + Vitest + Next.js production build
+7. **e2e** (depends on integration-test + web-nextjs): docker compose build/up/test/down via `e2e/e2e-test.sh`
+8. **ci-pass**: aggregate gate — fails if any of the above failed or was cancelled
 
 ### Port allocation in CI / parallel runs
 Service ports default to the values in `.env.example` (3000, 3001, 3500, …). For parallel test runs on the same host (two local runs, parallel CI jobs), use `scripts/pick-port.sh` (returns one free port) or `scripts/write-env-ports.sh` (writes an env file or `$GITHUB_ENV` with free ports for every service). Node code reads all ports from `process.env.*` — see `app/backend-ts/src/config.ts` and `app/web-nextjs/src/config.ts`. Never hardcode a port in new code.
@@ -211,13 +219,14 @@ Service ports default to the values in `.env.example` (3000, 3001, 3500, …). F
 Always verify locally before committing and pushing. All Makefile targets must pass:
 ```bash
 make compile           # compile SDK + backend TypeScript
-make lint              # lint + typecheck + prettier across all workspaces
+make lint              # lint + typecheck + prettier + hadolint + mermaid + scripts +x guard
+make static-check      # composite gate (lint + vulncheck + secrets + trivy-fs + mermaid-lint)
 make test              # unit tests with coverage (SDK + backend)
-make ci                # full local CI pipeline (lint + test + build)
-make ci-run            # run GitHub Actions workflow locally via act
+make ci                # full local CI pipeline (static-check + test + build)
+make ci-run            # run GitHub Actions workflow locally via act (skips e2e — needs DinD)
 make build             # rebuild service containers
 make up -d             # start the stack (detached)
-make test-integration  # integration tests (requires running stack)
+make integration-test  # integration tests (requires running stack)
 ```
 Verify all URLs from the README "Start, test, stop" section are reachable and return expected results:
 - `http://localhost:3000` — Next.js SSR frontend loads HTML

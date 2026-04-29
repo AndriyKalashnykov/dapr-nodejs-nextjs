@@ -10,13 +10,16 @@ COPY app/backend-ts ./app/backend-ts
 RUN pnpm install --frozen-lockfile --filter backend-ts...
 RUN pnpm --filter @sos/sdk run compile && \
     pnpm --filter backend-ts run compile && \
-    pnpm deploy --filter backend-ts --prod /deploy
+    pnpm deploy --legacy --filter backend-ts --prod /deploy
 
 # Runtime
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /deploy ./
+# `node:*-alpine` ships with a non-root `node` user (UID 1000). Copy the
+# deploy artifact owned by that user, then drop privileges before CMD.
+COPY --from=build --chown=node:node /deploy ./
+USER node
 EXPOSE 3001
 CMD [ "pnpm", "run", "start" ]

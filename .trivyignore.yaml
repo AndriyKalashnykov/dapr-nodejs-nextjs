@@ -1,0 +1,40 @@
+# trivy ignore config — see https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
+#
+# Path-scoped suppressions only: a finding must remain blocked everywhere
+# else, so the gate keeps catching new Dockerfile regressions.
+
+misconfigurations:
+  # DS-0002: "Image user should not be 'root'"
+  #   Every PRODUCTION Dockerfile in the repo declares `USER node`. The
+  #   paths suppressed below are dev/build-only and never deployed:
+  #     - shared/microservice/Dockerfile + Dockerfile.dev are build-stage
+  #       intermediate bases that need root for monorepo pnpm installs.
+  #     - app/*/Dockerfile.dev's bind-mount ./src from the host via
+  #       docker-compose; running as `node` (UID 1000) inside the container
+  #       hits EACCES on the bind-mounted volume because host file owner
+  #       UIDs don't always match.
+  - id: DS-0002
+    paths:
+      - "shared/microservice/Dockerfile"
+      - "Dockerfile.dev"
+      - "app/backend-ts/Dockerfile.dev"
+      - "app/web-nextjs/Dockerfile.dev"
+      - "scaffolds/generators/express-backend/templates/Dockerfile.dev"
+      - "scaffolds/generators/nextjs-frontend/templates/Dockerfile.dev"
+      - "scaffolds/generators/react-frontend/templates/Dockerfile.dev"
+
+  # DS-0011: "COPY with more than two arguments not ending with slash"
+  #   Only triggers in scaffolds/ templates because of {{placeholder}} tokens
+  #   that confuse trivy's parser. The scaffolds/ directory is excluded
+  #   from the scan via --skip-dirs, so this is defense-in-depth.
+  - id: DS-0011
+
+vulnerabilities:
+  # CVE-2026-33671: picomatch ReDoS via crafted extglob patterns
+  #   Source: npm CLI's bundled `tinyglobby/node_modules/picomatch@4.0.3`
+  #   inside the `node:*-alpine` base image — NOT part of the application's
+  #   dependency tree (the lockfile resolves picomatch to 4.0.4 already).
+  #   Production runtime invokes only `pnpm run start` → node, never npm,
+  #   so the vulnerable picomatch path is unreachable. Drop this entry
+  #   when the upstream `node:*-alpine` ships an npm with picomatch >= 4.0.4.
+  - id: CVE-2026-33671
