@@ -236,31 +236,9 @@ ci-dapr-up:
 	@printf '\n***Initializing Dapr (slim, no Docker)***\n\n'
 	@dapr init --slim 2>&1 | tail -5
 	@mkdir -p "$$HOME/.dapr/components"
-	@cat > "$$HOME/.dapr/components/local-secretstore.yaml" <<-'EOF'
-		apiVersion: dapr.io/v1alpha1
-		kind: Component
-		metadata:
-		  name: local-secretstore
-		spec:
-		  type: secretstores.local.file
-		  version: v1
-		  metadata:
-		    - name: secretsFile
-		      value: $$HOME/.dapr/secrets.json
-		    - name: nestedSeparator
-		      value: ':'
-		    - name: multiValued
-		      value: 'true'
-		EOF
-	@cat > "$$HOME/.dapr/secrets.json" <<-'EOF'
-		{
-		  "serviceSecrets": {
-		    "JWT_SECRET": "secret",
-		    "DB_USER": "postgres",
-		    "DB_PASSWORD": "postgres"
-		  }
-		}
-		EOF
+	@sed "s|__HOME__|$$HOME|g" scripts/ci-dapr/local-secretstore.yaml \
+	   > "$$HOME/.dapr/components/local-secretstore.yaml"
+	@cp scripts/ci-dapr/secrets.json "$$HOME/.dapr/secrets.json"
 	@printf '\n***Starting Dapr sidecar (port 3500)***\n\n'
 	@PATH="$$HOME/.dapr/bin:$$PATH" daprd \
 	   --app-id backend-ts \
