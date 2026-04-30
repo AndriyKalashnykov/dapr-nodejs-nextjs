@@ -29,7 +29,7 @@ CONTAINER_CMD    ?= $(shell command -v podman 2>/dev/null || echo docker)
 # Mermaid CLI is consumed as an OCI image (no native binary). Renovate tracks
 # the digest below; mise has no aqua entry for `minlag/mermaid-cli`.
 # renovate: datasource=docker depName=minlag/mermaid-cli
-MERMAID_CLI_VERSION := 11.12.0
+MERMAID_CLI_VERSION := 11.14.0
 
 #help: @ List available tasks
 help:
