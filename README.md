@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://app.renovatebot.com/dashboard#github/AndriyKalashnykov/dapr-nodejs-nextjs)
 
-# Dapr Node.js + Next.js Microservices Platform
+# Dapr Reference Stack — Node.js + Next.js + Azure Container Apps
 
-Reference implementation of a full-stack Dapr microservices platform on Node.js and TypeScript. A todo-list REST API backend (Express 5 + Postgres) and a Next.js SSR frontend are wired together through Dapr sidecars for state management (Redis), pub/sub messaging, and service-to-service invocation. Azure Container Apps is the production target (see `infra/azure/`); Docker Compose via Podman is the local dev loop.
+Reference implementation of a Dapr-based stack on Node.js and TypeScript. A todo-list REST API backend (Express 5 + Postgres) and a Next.js SSR frontend are wired together through Dapr sidecars for state management (Redis), pub/sub messaging, and service-to-service invocation. Azure Container Apps is the production target (see `infra/azure/`); Docker Compose via Podman is the local dev loop.
 
 ```mermaid
 C4Context

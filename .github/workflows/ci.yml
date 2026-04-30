@@ -18,29 +18,35 @@ concurrency:
 jobs:
   # ── Path filter ────────────────────────────────────────────────────────────
   # Detect whether the change touches code (vs. docs-only). Heavy jobs gate on
-  # `needs.changes.outputs.code == 'true'` so doc-only PRs skip the build/test
-  # matrix entirely while still passing the `ci-pass` gate (Repository Rulesets
-  # require the workflow to RUN, not just to be skipped — see `/ci-workflow`
-  # skill, "Path-Filter Strategy").
+  # `needs.changes.outputs.run_heavy == 'true'` so doc-only PRs skip the
+  # build/test matrix entirely while still passing the `ci-pass` gate
+  # (Repository Rulesets require the workflow to RUN, not just to be skipped —
+  # see `/ci-workflow` skill, "Path-Filter Strategy").
   changes:
     name: changes
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      run_heavy: ${{ steps.compute.outputs.run_heavy }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+      # `predicate-quantifier: every` is required for the `!pattern`
+      # negations to behave as exclusions. With the default `some`, a file
+      # is considered "matching" if ANY pattern in the filter matches —
+      # so `'**'` would match every file and the `'!**.md'` lines never
+      # exclude anything. With `every`, EVERY pattern must match, so the
+      # `!**.md` exclusion takes effect for `.md` files.
       - name: Detect code changes
         id: filter
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         with:
+          predicate-quantifier: every
           filters: |
             code:
               - '**'
               - '!**.md'
-              - 'CLAUDE.md'
               - '!docs/**'
               - '!specs/**'
               - '!LICENSE'
@@ -52,12 +58,31 @@ jobs:
               - '!**.jpg'
               - '!**.gif'
               - '!**.svg'
+            claude_md:
+              - 'CLAUDE.md'
+
+      # CLAUDE.md is a re-include over the `**.md` exclusion above —
+      # changes to it should still trigger the heavy jobs (project
+      # conventions / agent guidance). With `every`, we can't express
+      # the re-include inside a single filter, so OR the two filter
+      # outputs into a combined `run_heavy` signal.
+      - name: Compute run_heavy
+        id: compute
+        env:
+          CODE: ${{ steps.filter.outputs.code }}
+          CLAUDE_MD: ${{ steps.filter.outputs.claude_md }}
+        run: |
+          if [[ "$CODE" == "true" || "$CLAUDE_MD" == "true" ]]; then
+            echo "run_heavy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_heavy=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # ── Build (SDK compile + lint + test → upload artifact) ────────────────────
   build:
     name: build
     needs: [changes]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -96,7 +121,7 @@ jobs:
   static-check:
     name: static-check
     needs: [changes, build]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -133,7 +158,7 @@ jobs:
   test:
     name: test
     needs: [changes, build]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -172,7 +197,7 @@ jobs:
   integration-test:
     name: integration-test
     needs: [changes, build]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -243,7 +268,7 @@ jobs:
   web-nextjs:
     name: web-nextjs
     needs: [changes]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -274,7 +299,7 @@ jobs:
   e2e:
     name: e2e
     needs: [changes, integration-test, web-nextjs]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -340,7 +365,7 @@ jobs:
   docker:
     name: docker
     needs: [changes]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
