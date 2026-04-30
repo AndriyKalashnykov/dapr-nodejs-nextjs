@@ -17,9 +17,22 @@ CURRENTTAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "de
 # ── Project constants ───────────────────────────────────────────────────────
 COMPOSE_PROJECT  := demo-ts
 NETWORK          := $(COMPOSE_PROJECT)_dapr-net
-ALPINE_IMAGE     := alpine:3.21
-POSTGRES_IMAGE   := postgres:18-alpine
-REDIS_IMAGE      := redis:7-alpine
+
+# Diagnostic / one-shot images consumed by `make psql`, `make redis-cli`,
+# and `make shell`. Each tag is Renovate-tracked via the inline comment
+# below — the `_VERSION` constant carries the value, the `_IMAGE`
+# composite stays as a derived var so recipes read cleanly.
+# renovate: datasource=docker depName=alpine
+ALPINE_VERSION   := 3.21
+ALPINE_IMAGE     := alpine:$(ALPINE_VERSION)
+
+# renovate: datasource=docker depName=postgres
+POSTGRES_VERSION := 18-alpine
+POSTGRES_IMAGE   := postgres:$(POSTGRES_VERSION)
+
+# renovate: datasource=docker depName=redis
+REDIS_VERSION    := 8-alpine
+REDIS_IMAGE      := redis:$(REDIS_VERSION)
 
 # Container runtime — project standard is podman; fall back to docker for
 # environments without podman (some CI runners). Used by every recipe that
