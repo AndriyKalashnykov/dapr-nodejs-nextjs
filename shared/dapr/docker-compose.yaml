@@ -3,7 +3,7 @@ name: demo-ts
 services:
   # Dapr placement service (actor placement)
   placement:
-    image: "docker.io/daprio/dapr:1.17.5@sha256:aad1f7dc9cfc3f6c4f92af513f5d0deca4576be236daba9b99f3c0d418189b70"
+    image: "docker.io/daprio/dapr:1.17.6@sha256:1cf8b3e5445f74f5eb7f030f9b6827eca0ce089f30f0bb1ab81969b51b405f98"
     command: ["./placement", "-port", "50005"]
     ports:
       - "50005:50005"
@@ -16,7 +16,7 @@ services:
   # is ephemeral for dev/test; tmpfs is in-memory, created with the
   # container user's ownership, and loses nothing we care about on restart.
   scheduler:
-    image: "docker.io/daprio/dapr:1.17.5@sha256:aad1f7dc9cfc3f6c4f92af513f5d0deca4576be236daba9b99f3c0d418189b70"
+    image: "docker.io/daprio/dapr:1.17.6@sha256:1cf8b3e5445f74f5eb7f030f9b6827eca0ce089f30f0bb1ab81969b51b405f98"
     command: ["./scheduler", "--port", "50006", "--etcd-data-dir", "/var/run/dapr/scheduler"]
     ports:
       - "50006:50006"
