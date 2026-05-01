@@ -38,7 +38,7 @@ node = "24"
 # Terraform — used by infra-validate and e2e-aca targets. Tracked natively
 # by Renovate's `mise` manager (no annotation needed for the `terraform`
 # short-name).
-terraform = "1.15.0"
+terraform = "1.15.1"
 
 # Terraform lint — used by infra-validate. Replaces inline `docker run
 # ghcr.io/terraform-linters/tflint:latest` (banned `:latest` + no Renovate
