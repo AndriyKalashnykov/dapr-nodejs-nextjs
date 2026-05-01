@@ -29,7 +29,7 @@ node = "24"
 
 # Local GitHub Actions runner (for `make ci-run`).
 # renovate: datasource=github-releases depName=nektos/act
-"aqua:nektos/act" = "0.2.87"
+"aqua:nektos/act" = "0.2.88"
 
 # Dockerfile lint (wired into `make lint`).
 # renovate: datasource=github-releases depName=hadolint/hadolint
