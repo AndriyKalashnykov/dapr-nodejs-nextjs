@@ -16,14 +16,16 @@ ARG JWT_SECRET_KEY=build-time-placeholder
 ENV JWT_SECRET_KEY=$JWT_SECRET_KEY
 RUN pnpm run build
 
-# Runtime
+# Runtime — Next.js standalone output. The build stage emits a self-contained
+# tree at .next/standalone (with hoisted pnpm deps included via
+# outputFileTracingRoot in next.config.ts), plus .next/static and public/.
+# No pnpm/corepack at runtime; entry is `node server.js`.
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
-RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 ENV NODE_ENV=production
 WORKDIR /app
-# `node:*-alpine` ships with a non-root `node` user (UID 1000). Copy the
-# build artifact owned by that user, then drop privileges before CMD.
-COPY --from=build --chown=node:node /workspace/app/web-nextjs /app
+COPY --from=build --chown=node:node /workspace/app/web-nextjs/.next/standalone /app
+COPY --from=build --chown=node:node /workspace/app/web-nextjs/.next/static /app/app/web-nextjs/.next/static
+COPY --from=build --chown=node:node /workspace/app/web-nextjs/public /app/app/web-nextjs/public
 USER node
-EXPOSE 3001
-CMD [ "pnpm", "run", "start" ]
+EXPOSE 3000
+CMD ["node", "app/web-nextjs/server.js"]

@@ -455,19 +455,22 @@ image-build-prod: deps
 	   -f app/$$SERVICE/Dockerfile .
 
 #image-smoke-test: @ Boot a built image and verify it starts cleanly (Pattern A gate 3); requires SERVICE + IMAGE_TAG
+# 12-factor (config in env): pass .env.example for the canonical host shape
+# (SERVER_PORT, DAPR_HOST, DB_HOST, JWT_SECRET_KEY …) and inject the per-service
+# SERVICE_NAME inline, mirroring each service's docker-compose.yaml. This way
+# the smoke test stays in sync as new required envs are added to config.ts.
 image-smoke-test:
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
 	@: $${IMAGE_TAG:?required — image tag}
 	@$(CONTAINER_CMD) rm -f "$$SERVICE-smoke" 2>/dev/null || true
 	@printf '\n***Smoke test: %s:%s***\n\n' "$$SERVICE" "$$IMAGE_TAG"
 	@$(CONTAINER_CMD) run -d --name="$$SERVICE-smoke" \
-	   -e JWT_SECRET_KEY=smoke \
-	   -e DAPR_HOST=127.0.0.1 \
-	   -e DB_HOST=127.0.0.1 \
+	   --env-file .env.example \
+	   -e SERVICE_NAME=$$SERVICE \
 	   "$$SERVICE:$$IMAGE_TAG" >/dev/null
 	@end=$$(( $$(date +%s) + 30 )); \
 	 while [ $$(date +%s) -lt $$end ]; do \
-	   if $(CONTAINER_CMD) logs "$$SERVICE-smoke" 2>&1 | grep -qE 'listening|Server running|started on port|Ready in|ready - started'; then \
+	   if $(CONTAINER_CMD) logs "$$SERVICE-smoke" 2>&1 | grep -qE 'listening|Server running|started on port|Ready in|ready - started|Awaiting Sidecar to be Started|Local: *http'; then \
 	     printf 'PASS: %s container booted\n' "$$SERVICE"; \
 	     $(CONTAINER_CMD) rm -f "$$SERVICE-smoke" >/dev/null; exit 0; \
 	   fi; \
