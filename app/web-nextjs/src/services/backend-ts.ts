@@ -1,13 +1,19 @@
 import { context } from "@/context";
 import type { Todo } from "@/types";
 import { HttpMethod } from "@dapr/dapr";
+import { context as otelContext, propagation } from "@opentelemetry/api";
 import { cache } from "react";
 
-const authHeaders = (token: string) => ({
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-});
+const propagatedHeaders = (
+  base: Record<string, string> = {},
+): { headers: Record<string, string> } => {
+  const headers = { ...base };
+  propagation.inject(otelContext.active(), headers);
+  return { headers };
+};
+
+const authHeaders = (token: string) =>
+  propagatedHeaders({ Authorization: `Bearer ${token}` });
 
 const SERVICE_APP_ID = process.env.BACKEND_APP_ID || "backend-ts";
 
@@ -25,6 +31,8 @@ export const getById = cache(
       SERVICE_APP_ID,
       METHODS.TodoGetById(id),
       HttpMethod.GET,
+      undefined,
+      propagatedHeaders(),
     ) as Promise<{
       payload: Todo;
     }>,

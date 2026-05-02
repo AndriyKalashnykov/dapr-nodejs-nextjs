@@ -156,9 +156,15 @@ importers:
       '@dapr/dapr':
         specifier: ^3.6.0
         version: 3.17.0
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.1
       '@tanstack/react-query':
         specifier: ^5.74.4
         version: 5.100.6(react@19.2.5)
+      '@vercel/otel':
+        specifier: ^2.1.0
+        version: 2.1.2(@opentelemetry/api-logs@0.216.0)(@opentelemetry/api@1.9.1)(@opentelemetry/instrumentation@0.216.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.216.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
@@ -1821,6 +1827,18 @@ packages:
   '@typescript-eslint/visitor-keys@8.59.1':
     resolution: {integrity: sha512-LdDNl6C5iJExcM0Yh0PwAIBb9PrSiCsWamF/JyEZawm3kFDnRoaq3LGE4bpyRao/fWeGKKyw7icx0YxrLFC5Cg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@vercel/otel@2.1.2':
+    resolution: {integrity: sha512-PbGyq1lLwWbnftylNcQ6KFxc7DLc8LJdnaU3snM43bgXiWkWsHrgaU/LdUD8sHaSgG8UKuydX/aymNt3J+hzuA==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.9.0 <2.0.0'
+      '@opentelemetry/api-logs': '>=0.200.0 <0.300.0'
+      '@opentelemetry/instrumentation': '>=0.200.0 <0.300.0'
+      '@opentelemetry/resources': '>=2.0.0 <3.0.0'
+      '@opentelemetry/sdk-logs': '>=0.200.0 <0.300.0'
+      '@opentelemetry/sdk-metrics': '>=2.0.0 <3.0.0'
+      '@opentelemetry/sdk-trace-base': '>=2.0.0 <3.0.0'
 
   '@vitest/coverage-v8@4.1.5':
     resolution: {integrity: sha512-38C0/Ddb7HcRG0Z4/DUem8x57d2p9jYgp18mkaYswEOQBGsI1CG4f/hjm0ZCeaJfWhSZ4k7jgs29V1Zom7Ki9A==}
@@ -5105,6 +5123,16 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.59.1
       eslint-visitor-keys: 5.0.1
+
+  '@vercel/otel@2.1.2(@opentelemetry/api-logs@0.216.0)(@opentelemetry/api@1.9.1)(@opentelemetry/instrumentation@0.216.0(@opentelemetry/api@1.9.1))(@opentelemetry/resources@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.216.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.216.0
+      '@opentelemetry/instrumentation': 0.216.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.7.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.216.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-metrics': 2.7.1(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-base': 2.7.1(@opentelemetry/api@1.9.1)
 
   '@vitest/coverage-v8@4.1.5(vitest@4.1.5)':
     dependencies:
