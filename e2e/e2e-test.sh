@@ -295,26 +295,34 @@ else
 fi
 
 # Negative path — publish a malformed CloudEvent directly through Dapr's
-# publish API. The consumer's input schema requires `title`; without it,
-# zod validation throws and the consumer returns DROP (not RETRY) so Dapr
-# does not requeue. Witness: no error spike in backend-ts logs.
-ERR_BEFORE=$(docker compose logs --tail=200 backend-ts 2>/dev/null | grep -c 'Error processing message' || true)
+# publish API. The consumer's input schema requires `title`; the framework's
+# zod validator rejects the payload before the handler's try/catch runs, so
+# the consumer returns DROP automatically. Dapr logs that drop in its own
+# sidecar log ("DROP status returned from app while processing pub/sub
+# event <id>") — that's the canonical witness, not the app's catch-block
+# log line.
+PROBE_ID="drop-probe-$$"
 PUBSUB_DROP_URL="http://localhost:${DAPR_PORT}/v1.0/publish/redis-pubsub/todo-data"
 DROP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
   -X POST -H 'Content-Type: application/cloudevents+json' \
-  -d '{"specversion":"1.0","type":"com.dapr.event.sent","source":"e2e-test","id":"drop-probe-'"$$"'","data":{"not_title":"missing required field"}}' \
+  -d '{"specversion":"1.0","type":"com.dapr.event.sent","source":"e2e-test","id":"'"${PROBE_ID}"'","data":{"not_title":"missing required field"}}' \
   "$PUBSUB_DROP_URL" 2>/dev/null || echo '000')
 if [[ "$DROP_STATUS" == "204" ]]; then
   record PASS "Pub/sub negative: malformed CloudEvent accepted by sidecar (204)"
-  sleep 2
-  ERR_AFTER=$(docker compose logs --tail=200 backend-ts 2>/dev/null | grep -c 'Error processing message' || true)
-  ERR_DELTA=$(( ERR_AFTER - ERR_BEFORE ))
-  # 1 expected error log = consumer rejected the malformed event with DROP.
-  # >5 means Dapr is requeueing the bad event (RETRY), which would be a bug.
-  if [[ "$ERR_DELTA" -ge 1 && "$ERR_DELTA" -le 5 ]]; then
-    record PASS "Pub/sub negative: consumer DROP (no requeue storm; ${ERR_DELTA} error log(s))"
+  # Wait up to 10s for the sidecar to log the DROP — DinD CI is slower than
+  # local Podman.
+  DROP_WITNESS=0
+  for _ in $(seq 1 10); do
+    if docker compose logs --tail=200 backend-ts-dapr 2>/dev/null \
+        | grep -q "DROP status returned from app while processing pub/sub event ${PROBE_ID}"; then
+      DROP_WITNESS=1; break
+    fi
+    sleep 1
+  done
+  if [[ "$DROP_WITNESS" == "1" ]]; then
+    record PASS "Pub/sub negative: sidecar logged DROP for ${PROBE_ID} (consumer rejected malformed event; no requeue storm)"
   else
-    record FAIL "Pub/sub negative: unexpected error count delta=${ERR_DELTA} (expected 1-5)"
+    record FAIL "Pub/sub negative: sidecar did not log 'DROP status returned from app' for ${PROBE_ID} within 10s"
   fi
 else
   record FAIL "Pub/sub negative: sidecar returned ${DROP_STATUS} (expected 204)"
