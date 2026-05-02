@@ -15,6 +15,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Force CONTAINER_CMD=docker for every job. ubuntu-latest runners ship with
+# podman BEFORE docker on PATH, so the Makefile's
+# `command -v podman 2>/dev/null || echo docker` picks podman, which tags
+# images with a `localhost/` prefix that the docker daemon (used by
+# trivy-action, our smoke test, and `docker compose` in the e2e job)
+# cannot see. Fix at the workflow level so every job inherits.
+env:
+  CONTAINER_CMD: docker
+
 jobs:
   # ── Path filter ────────────────────────────────────────────────────────────
   # Detect whether the change touches code (vs. docs-only). Heavy jobs gate on
