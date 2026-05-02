@@ -16,6 +16,13 @@ services:
       DAPR_HOST: 127.0.0.1
       DAPR_PORT: 3500
       OTLP_ENDPOINT: http://grafana-otel:4318
+      # @vercel/otel reads OTEL_EXPORTER_OTLP_ENDPOINT to discover the OTLP
+      # collector. Mirror OTLP_ENDPOINT into the standard env var so the SDK
+      # picks it up at module-load time (programmatic env mutation inside
+      # the instrumentation hook runs too late).
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://grafana-otel:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      SERVICE_NAME: web-nextjs
       JWT_SECRET_KEY: secret
     volumes:
       - /app/node_modules # Persist docker containers modules so that localhost are not used

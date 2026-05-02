@@ -35,10 +35,16 @@ describe("web-nextjs → backend-ts Dapr invoker", () => {
 
   it("getById invokes with no auth (server-side only)", async () => {
     await getById(ID);
+    // Headers object is always passed so OTel propagation can inject
+    // traceparent when an active span context is present. With no OTel
+    // SDK initialized in the test runner, the default no-op propagator
+    // leaves the headers object empty.
     expect(invoke).toHaveBeenCalledWith(
       "backend-ts",
       `api/v1/todos/${ID}`,
       HttpMethod.GET,
+      undefined,
+      { headers: {} },
     );
   });
 

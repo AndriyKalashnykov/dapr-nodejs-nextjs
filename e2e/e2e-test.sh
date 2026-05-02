@@ -216,10 +216,16 @@ fi
 echo
 
 echo "[7/8] OpenTelemetry trace propagation (web-nextjs → backend-ts → Zipkin)..."
-# Trigger an SSR request through the Next.js frontend so its OTel exporter
-# emits a trace that web-nextjs handed off to backend-ts via the Dapr
-# invoker — gives both services spans on the same traceId.
-curl -sf -o /dev/null --max-time 10 "http://localhost:${NEXTJS_PORT}" 2>/dev/null || true
+# Trigger an SSR/route request that actually calls backend-ts via the Dapr
+# invoker. The home page doesn't invoke backend-ts, so we go through
+# /api/todos which calls getAll() → DaprClient.invoker.invoke(). A session
+# cookie is required; mint one via the dev `/api/auth` endpoint first.
+TRACE_COOKIES=$(mktemp)
+curl -sf --max-time 5 -c "$TRACE_COOKIES" -o /dev/null \
+  "http://localhost:${NEXTJS_PORT}/api/auth" 2>/dev/null || true
+curl -sf --max-time 10 -b "$TRACE_COOKIES" -o /dev/null \
+  "http://localhost:${NEXTJS_PORT}/api/todos" 2>/dev/null || true
+rm -f "$TRACE_COOKIES"
 # Allow a short window for spans to flush before querying Zipkin.
 sleep 5
 TRACES_URL="http://localhost:${ZIPKIN_PORT}/api/v2/traces?serviceName=backend-ts&limit=50"
@@ -246,10 +252,7 @@ done
 if [[ "$PROPAGATED" == "1" ]]; then
   record PASS "Trace propagation web-nextjs → backend-ts (W3C traceparent)"
 else
-  # Non-blocking: SSR for the homepage may not actually call backend-ts, and
-  # OTel context propagation through the Dapr invoker is a known gap. Probe
-  # stays in the suite so a future fix is observable.
-  record WARN "Trace propagation web-nextjs → backend-ts not observed (non-blocking)"
+  record FAIL "No Zipkin trace contains spans from both web-nextjs and backend-ts (W3C traceparent propagation broken)"
 fi
 echo
 

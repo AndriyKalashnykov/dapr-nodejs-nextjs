@@ -42,3 +42,6 @@ terraform.tfstate.backup
 
 # DAST (ZAP baseline) reports
 zap-output/
+
+# Claude Code ephemeral state (settings.json is tracked; lock files are not)
+.claude/scheduled_tasks.lock
