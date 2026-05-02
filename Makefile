@@ -161,7 +161,7 @@ clean:
 #setup: @ Build base Docker images (run once after clone)
 setup: deps
 	@printf '\n***Building microservice base image***\n\n'
-	@$(CONTAINER_CMD) build ./shared/microservice -t microservice-build --build-arg ADD_CERT=$$ADD_CERT
+	@$(CONTAINER_CMD) build ./shared/microservice -t microservice-build --build-arg ADD_CERT="$${ADD_CERT:-}"
 	@$(CONTAINER_CMD) build -f Dockerfile.dev -t microservice-sdk-build .
 
 #build: @ Build all service containers in parallel
