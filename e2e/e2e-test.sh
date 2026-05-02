@@ -282,9 +282,7 @@ if echo "$PROBE_TODO" | grep -q '"id"'; then
   if [[ "$WITNESS" == "1" ]]; then
     record PASS "Pub/sub round-trip: consumer received event"
   else
-    # Non-blocking: pub/sub delivery is unreliable in DinD CI runners even at
-    # 30s. Probe stays in the suite so a future fix is observable.
-    record WARN "Pub/sub round-trip: consumer 'Consumer handling message' not seen within 30s (non-blocking)"
+    record FAIL "Pub/sub round-trip: no 'Consumer handling message' log within 30s"
   fi
   PROBE_ID=$(echo "$PROBE_TODO" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).data.id)}catch{console.log('')}})")
   if [[ -n "$PROBE_ID" ]]; then
@@ -316,12 +314,10 @@ if [[ "$DROP_STATUS" == "204" ]]; then
   if [[ "$ERR_DELTA" -ge 1 && "$ERR_DELTA" -le 5 ]]; then
     record PASS "Pub/sub negative: consumer DROP (no requeue storm; ${ERR_DELTA} error log(s))"
   else
-    # Non-blocking: depends on the same pub/sub delivery path that the
-    # round-trip probe also flakes on in CI.
-    record WARN "Pub/sub negative: error count delta=${ERR_DELTA} (expected 1-5; non-blocking)"
+    record FAIL "Pub/sub negative: unexpected error count delta=${ERR_DELTA} (expected 1-5)"
   fi
 else
-  record WARN "Pub/sub negative: sidecar returned ${DROP_STATUS} (expected 204; non-blocking)"
+  record FAIL "Pub/sub negative: sidecar returned ${DROP_STATUS} (expected 204)"
 fi
 echo
 
