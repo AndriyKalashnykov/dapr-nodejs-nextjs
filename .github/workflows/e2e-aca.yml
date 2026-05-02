@@ -154,7 +154,7 @@ jobs:
       # image index free of `unknown/unknown` attestation entries.
       - name: Build and push
         id: push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v7.0.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: app/${{ matrix.service }}/Dockerfile
@@ -169,7 +169,7 @@ jobs:
 
       # Pattern A gate 5 — Cosign keyless OIDC signing by digest.
       - name: Install cosign
-        uses: sigstore/cosign-installer@d7d6e07505a5d62a0b35eaa2dabd16a3146b4c52 # v3.7.0
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
 
       - name: Sign image with cosign (keyless OIDC)
         env:

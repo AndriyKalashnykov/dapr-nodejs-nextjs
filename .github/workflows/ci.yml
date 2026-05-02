@@ -380,7 +380,7 @@ jobs:
           cache: true
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
@@ -424,7 +424,7 @@ jobs:
       # compile regressions before the manual `e2e-aca.yml` workflow tries to
       # push to ACR. ~95% cache-hit from Gate 1 via type=gha.
       - name: Multi-arch validation build
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v7.0.0
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: app/${{ matrix.service }}/Dockerfile
