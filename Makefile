@@ -662,13 +662,18 @@ release: check-version
 ACT_JOBS ?= changes static-check build test web-nextjs
 
 #ci-run: @ Run GitHub Actions workflow locally using act (mise-managed). Skips e2e (DinD).
+# Secret-handling rule: pass GH_ACCESS_TOKEN via env-only `--secret KEY` form,
+# NOT `--secret KEY=$VALUE`. The latter puts the token value into argv where
+# `ps -ef` exposes it to any local user. The env-only form leaves the value
+# in act's inherited process env (where `ps` only shows it to the same UID
+# under default kernel hardening) and never enters the command line.
 ci-run: deps
 	@port=$$(shuf -i 40000-59999 -n 1); \
 	 artifacts=$$(mktemp -d); \
 	 evt=$$(mktemp /tmp/act-push-event.XXXXXX.json); \
-	 secret_arg=""; \
+	 secret_args=(); \
 	 if [ -n "$${GH_ACCESS_TOKEN:-}" ]; then \
-	   secret_arg="--secret GH_ACCESS_TOKEN=$$GH_ACCESS_TOKEN"; \
+	   secret_args=(--secret GH_ACCESS_TOKEN); \
 	 fi; \
 	 trap "rm -rf $$artifacts $$evt" EXIT; \
 	 # Synthetic push event — act's default omits `repository.default_branch`, \
@@ -684,7 +689,7 @@ ci-run: deps
 	        --eventpath "$$evt" \
 	        --artifact-server-port "$$port" \
 	        --artifact-server-path "$$artifacts" \
-	        $$secret_arg; then \
+	        "$${secret_args[@]}"; then \
 	     echo "act job $$j failed"; status=1; break; \
 	   fi; \
 	 done; \
