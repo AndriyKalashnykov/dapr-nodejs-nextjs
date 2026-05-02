@@ -24,7 +24,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 describe('Integration: Knex migrations', () => {
   let context: Context<ContextKind>;
 
-  const knownTables = ['todos'];
+  const knownTables = ['todo'];
   const migrationsConfig = {
     directory: path.resolve(__dirname, 'migrations'),
     extension: 'ts',

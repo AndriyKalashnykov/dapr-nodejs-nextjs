@@ -444,9 +444,13 @@ tf-destroy: tf-init
 image-build-prod: deps
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
 	@: $${IMAGE_TAG:?required — image tag}
+	# No --cache-{from,to} type=gha here: that backend needs
+	# ACTIONS_CACHE_URL + ACTIONS_RUNTIME_TOKEN exposed to the runner
+	# (via crazy-max/ghaction-github-runtime). The multi-arch validation
+	# build via docker/build-push-action in ci.yml's `docker` job handles
+	# GHA cache automatically; this single-arch scan-stage build doesn't
+	# need it.
 	@$(CONTAINER_CMD) buildx build --load \
-	   --cache-from type=gha \
-	   --cache-to type=gha,mode=max \
 	   --tag "$$SERVICE:$$IMAGE_TAG" \
 	   -f app/$$SERVICE/Dockerfile .
 
@@ -494,13 +498,15 @@ image-push-multi-arch: deps
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
 	@: $${IMAGE_TAG:?required — image tag}
 	@: $${REGISTRY:?required — fully-qualified registry FQDN (e.g. myacr.azurecr.io)}
+	# No --cache-{from,to} type=gha here — see comment on image-build-prod.
+	# The e2e-aca workflow path uses this target; for ci.yml's `docker`
+	# job, the multi-arch validation goes through docker/build-push-action
+	# which exposes GHA cache env vars correctly.
 	@$(CONTAINER_CMD) buildx build \
 	   --platform linux/amd64,linux/arm64 \
 	   --push \
 	   --provenance=false \
 	   --sbom=false \
-	   --cache-from type=gha \
-	   --cache-to type=gha,mode=max \
 	   --tag "$$REGISTRY/$$SERVICE:$$IMAGE_TAG" \
 	   -f app/$$SERVICE/Dockerfile .
 
