@@ -45,7 +45,7 @@ services:
       - dapr-net
   # Dapr dashboard
   dapr-dashboard:
-    image: "docker.io/daprio/dashboard:latest@sha256:4be696707bd1349b49875f8e6da0d27dad742834483740d5a7897a73abeaf83d"
+    image: "docker.io/daprio/dashboard:0.15.0@sha256:4be696707bd1349b49875f8e6da0d27dad742834483740d5a7897a73abeaf83d"
     command: [ "--docker-compose=true",
       "--components-path=/home/nonroot/components",
       "--config-path=/home/nonroot/config",

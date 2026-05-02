@@ -1,5 +1,5 @@
-import { getAll } from '@/services/todo';
-import { type NextRequest, NextResponse } from 'next/server';
+import { getAll } from "@/services/todo";
+import { type NextRequest, NextResponse } from "next/server";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_: NextRequest) {
@@ -7,7 +7,7 @@ export async function GET(_: NextRequest) {
   return NextResponse.json(data, {
     status: 200,
     headers: {
-      'Cache-Control': 'no-store',
+      "Cache-Control": "no-store",
     },
   });
 }

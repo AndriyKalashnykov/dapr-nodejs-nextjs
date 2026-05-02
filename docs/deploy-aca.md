@@ -6,30 +6,30 @@
 
 From `infra/azure/`:
 
-| Resource | Purpose |
-|---|---|
-| Azure Container Apps environment | Runtime platform (Dapr sidecar injection, scale rules, ingress) |
-| `backend-ts` Container App | Express 5 API, external ingress, Dapr-enabled |
-| `web-nextjs` Container App | Next.js SSR, external ingress, Dapr-enabled |
-| Azure Container Registry | Hosts the two images (tagged with git SHA) |
-| PostgreSQL Flexible Server | `backend_ts` schema, VNet-integrated, private DNS |
-| Azure Cache for Redis | Dapr state + pub/sub backend, private endpoint |
-| Azure Key Vault | JWT secret, DB password, Redis password, App Insights conn string |
-| Dapr components | `redis-state`, `redis-pubsub`, `azure-keyvault-secretstore` — scoped to both app-ids |
-| Application Insights + Log Analytics | Traces, logs, metrics |
-| Virtual Network + subnets + private DNS zones | Private connectivity between apps and backing services |
+| Resource                                      | Purpose                                                                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Azure Container Apps environment              | Runtime platform (Dapr sidecar injection, scale rules, ingress)                      |
+| `backend-ts` Container App                    | Express 5 API, external ingress, Dapr-enabled                                        |
+| `web-nextjs` Container App                    | Next.js SSR, external ingress, Dapr-enabled                                          |
+| Azure Container Registry                      | Hosts the two images (tagged with git SHA)                                           |
+| PostgreSQL Flexible Server                    | `backend_ts` schema, VNet-integrated, private DNS                                    |
+| Azure Cache for Redis                         | Dapr state + pub/sub backend, private endpoint                                       |
+| Azure Key Vault                               | JWT secret, DB password, Redis password, App Insights conn string                    |
+| Dapr components                               | `redis-state`, `redis-pubsub`, `azure-keyvault-secretstore` — scoped to both app-ids |
+| Application Insights + Log Analytics          | Traces, logs, metrics                                                                |
+| Virtual Network + subnets + private DNS zones | Private connectivity between apps and backing services                               |
 
 ## Cost
 
 Approximate cost per full `make e2e-aca` run (deploy → smoke → destroy), West US 2:
 
-| Resource | Per-hour | 15-min run |
-|---|---|---|
-| PostgreSQL `B_Standard_B1ms` + 32 GB storage | ~$0.03 | ~$0.01 |
-| Azure Cache for Redis Basic C0 | ~$0.02 | ~$0.01 |
-| Container Apps (2× 0.5 vCPU / 1 GiB, idle) | ~$0.05 | ~$0.02 |
-| Key Vault + Log Analytics + App Insights + ACR (Basic) | ~$0.02 | ~$0.01 |
-| **Total** | | **~$0.05–$0.30** |
+| Resource                                               | Per-hour | 15-min run       |
+| ------------------------------------------------------ | -------- | ---------------- |
+| PostgreSQL `B_Standard_B1ms` + 32 GB storage           | ~$0.03   | ~$0.01           |
+| Azure Cache for Redis Basic C0                         | ~$0.02   | ~$0.01           |
+| Container Apps (2× 0.5 vCPU / 1 GiB, idle)             | ~$0.05   | ~$0.02           |
+| Key Vault + Log Analytics + App Insights + ACR (Basic) | ~$0.02   | ~$0.01           |
+| **Total**                                              |          | **~$0.05–$0.30** |
 
 The bulk of the expense is sunk in the first deploy (ACR, VNet, DNS zones are ~free but creation is serialized). Repeated runs inside one hour don't add much. **Do NOT wire to PRs** — cost compounds and each run serializes on Terraform state.
 
@@ -92,12 +92,12 @@ For PR-triggered runs (not recommended due to cost) add a second credential with
 
 Settings → Secrets and variables → Actions → **Secrets**:
 
-| Secret | Value |
-|---|---|
-| `AZURE_CLIENT_ID` | `$APP_ID` from step 1 |
-| `AZURE_TENANT_ID` | Tenant ID from step 1 |
-| `AZURE_SUBSCRIPTION_ID` | Subscription ID |
-| `JWT_SECRET_KEY` | A strong random value; must match the value the smoke test uses when signing tokens. `openssl rand -hex 32` is a reasonable choice |
+| Secret                  | Value                                                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `AZURE_CLIENT_ID`       | `$APP_ID` from step 1                                                                                                              |
+| `AZURE_TENANT_ID`       | Tenant ID from step 1                                                                                                              |
+| `AZURE_SUBSCRIPTION_ID` | Subscription ID                                                                                                                    |
+| `JWT_SECRET_KEY`        | A strong random value; must match the value the smoke test uses when signing tokens. `openssl rand -hex 32` is a reasonable choice |
 
 ### 5. (Optional) Service-principal client-secret alternative
 
@@ -162,6 +162,7 @@ CVE-2099-12345
 ```
 
 Cosign signing, multi-arch, and buildkit in-manifest attestations are deliberately omitted from this pipeline:
+
 - Images are ephemeral — `terraform destroy` removes them at the end of each run
 - No third-party consumers need to verify signatures
 - ACA runs amd64 only
@@ -171,6 +172,7 @@ For a GHCR-publishing pipeline with long-lived consumer images, those gates woul
 ## What the smoke test validates (and what it doesn't)
 
 **Does** validate:
+
 - Container Apps reach the Ready state
 - Ingress routes incoming HTTPS to both apps
 - Managed identity + Key Vault + Dapr secretstore chain resolves at app startup
@@ -179,16 +181,17 @@ For a GHCR-publishing pipeline with long-lived consumer images, those gates woul
 - Dapr component init against Azure Cache for Redis (verified via backend startup succeeding)
 
 **Does NOT** validate (deferred — compose e2e covers locally, none of these run in ACA):
+
 - Zipkin tracing (ACA uses App Insights; needs `@azure/monitor-opentelemetry` wiring — see `TODO` in `infra/azure/main.tf` locals)
 - Dapr dashboard / placement / scheduler visibility (ACA hides these)
 - Grafana OTEL collector
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `terraform apply` fails at `azurerm_role_assignment.*_kv_secrets_user` | SP lacks `User Access Administrator` | Re-run step 2 of OIDC setup |
-| Container Apps stuck `Provisioning` | Image pull failed | Check ACR role assignment on container app MI (provisioned by the `container_app` module) and that the image+tag exists in the ACR |
-| Backend returns 500 | Dapr secretstore can't reach KV | Verify `azurerm_role_assignment.backend_kv_secrets_user` applied; check the MI has "Key Vault Secrets User" on the vault |
-| Smoke test 401 on authed calls | `JWT_SECRET_KEY` secret mismatch between the KV value seeded by TF and the value signing the JWT in the smoke script | Ensure `TF_VAR_jwt_secret_key` and `JWT_SECRET_KEY` both export to the same value in the same shell |
-| `terraform destroy` hangs on Key Vault | Soft delete holds the vault for retention days | `var.purge_protection_enabled = false` in the KV module lets destroy proceed; add `az keyvault purge` as a post-step if needed |
+| Symptom                                                                | Cause                                                                                                                | Fix                                                                                                                                |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `terraform apply` fails at `azurerm_role_assignment.*_kv_secrets_user` | SP lacks `User Access Administrator`                                                                                 | Re-run step 2 of OIDC setup                                                                                                        |
+| Container Apps stuck `Provisioning`                                    | Image pull failed                                                                                                    | Check ACR role assignment on container app MI (provisioned by the `container_app` module) and that the image+tag exists in the ACR |
+| Backend returns 500                                                    | Dapr secretstore can't reach KV                                                                                      | Verify `azurerm_role_assignment.backend_kv_secrets_user` applied; check the MI has "Key Vault Secrets User" on the vault           |
+| Smoke test 401 on authed calls                                         | `JWT_SECRET_KEY` secret mismatch between the KV value seeded by TF and the value signing the JWT in the smoke script | Ensure `TF_VAR_jwt_secret_key` and `JWT_SECRET_KEY` both export to the same value in the same shell                                |
+| `terraform destroy` hangs on Key Vault                                 | Soft delete holds the vault for retention days                                                                       | `var.purge_protection_enabled = false` in the KV module lets destroy proceed; add `az keyvault purge` as a post-step if needed     |

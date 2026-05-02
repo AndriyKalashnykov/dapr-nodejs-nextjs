@@ -1,7 +1,7 @@
 # ADR 0003: Redis as the state store and pub/sub broker
 
 | Status   | Date       |
-|----------|------------|
+| -------- | ---------- |
 | Accepted | 2026-04-29 |
 
 ## Context
@@ -23,16 +23,17 @@ in Azure Container Apps so behavior parity is preserved across env.
 Use **Redis** as both the state store and the pub/sub broker, via the
 following Dapr components:
 
-| Component            | Type                          | Local                | Production           |
-|----------------------|-------------------------------|----------------------|----------------------|
-| `redis-state`        | `state.redis`                 | `redis:8-alpine`     | Azure Cache for Redis |
-| `redis-pubsub`       | `pubsub.redis`                | same instance        | same instance        |
+| Component      | Type           | Local            | Production            |
+| -------------- | -------------- | ---------------- | --------------------- |
+| `redis-state`  | `state.redis`  | `redis:8-alpine` | Azure Cache for Redis |
+| `redis-pubsub` | `pubsub.redis` | same instance    | same instance         |
 
 Topic: `todo-data`. Component YAML lives in `shared/dapr/components/`.
 
 ## Consequences
 
 **Pros**
+
 - A single managed dependency (one Redis cluster) covers both
   capabilities, halving operational surface vs. a separate broker.
 - Azure Cache for Redis is private-endpoint accessible from ACA over
@@ -44,6 +45,7 @@ Topic: `todo-data`. Component YAML lives in `shared/dapr/components/`.
   specific consumer code in the application.
 
 **Cons**
+
 - Pub/sub durability is bounded by Redis stream length / TTL — not
   suitable for events that must persist for days. The `todo-data`
   events are short-lived state-change notifications, so this fits.

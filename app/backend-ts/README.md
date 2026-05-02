@@ -1,4 +1,5 @@
 ## Open a commandline shell in the running container
+
 Using the microservice name matching this service (ex. `app/{MICROSERVICE_NAME}`), execute commands using `podman compose` to jump into the container command line.
 Often times this can be helpful when working with local database migrations, such as creating a new migration or inspect the local database.
 
@@ -26,6 +27,7 @@ Found 1 Pending Migration file/files.
 ```
 
 ## Create a new migration
+
 Using the microservice name matching this service (ex. `app/{MICROSERVICE_NAME}`), execute commands using `podman compose` to create a new migration file.
 
 ```

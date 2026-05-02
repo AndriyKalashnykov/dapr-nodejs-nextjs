@@ -1,4 +1,4 @@
-import type { DaprClient } from '@dapr/dapr';
+import type { DaprClient } from "@dapr/dapr";
 
 export type Session = {
   userId: string;
@@ -10,7 +10,7 @@ export type User = {
 };
 
 export type Context = {
-  env: 'development' | 'test' | 'production';
+  env: "development" | "test" | "production";
   dapr: DaprClient;
   user?: User;
 };

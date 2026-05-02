@@ -9,13 +9,16 @@ Dapr-based microservices platform using Node.js/TypeScript with pnpm workspaces 
 ## Common Commands
 
 ### Workspace Commands
+
 This is a pnpm workspace monorepo. Run commands from repo root using `--filter`:
+
 ```bash
 pnpm --filter backend-ts run test         # Run in specific workspace
 pnpm --filter @sos/sdk run compile        # SDK must be compiled before backend
 ```
 
 ### Makefile (run `make help` for full list)
+
 ```bash
 # Setup (first time)
 make deps && make install && make setup && make build
@@ -39,7 +42,7 @@ make lint           # Lint + typecheck (also: hadolint, scripts +x, terraform va
 make vulncheck      # pnpm audit (fails on moderate+)
 make secrets        # gitleaks scan
 make trivy-fs       # Trivy filesystem CVE/secret/misconfig scan
-make static-check   # Composite gate — lint + vulncheck + secrets + trivy-fs + mermaid-lint
+make static-check   # Composite gate — lint (includes mermaid-lint) + vulncheck + secrets + trivy-fs
 make test           # Unit tests across SDK + backend (with coverage)
 make ci             # Full CI pipeline locally (static-check + test + build)
 
@@ -67,6 +70,7 @@ make renovate-validate      # Validate Renovate configuration
 ```
 
 ### Backend (`app/backend-ts`)
+
 ```bash
 pnpm run dev              # Hot reload dev server (runs DB migrations first)
 pnpm run compile          # TypeScript compilation
@@ -84,6 +88,7 @@ cd app/backend-ts && NODE_ENV=test pnpm exec vitest --config src/lib/test/vitest
 ```
 
 ### Frontend (`app/web-nextjs`)
+
 ```bash
 pnpm run dev    # Next.js dev server
 pnpm run build  # Production build (requires JWT_SECRET_KEY env var)
@@ -93,6 +98,7 @@ pnpm run test:cov # Vitest unit tests with coverage (single run)
 ```
 
 ### Shared SDK (`packages/@sos/sdk`)
+
 ```bash
 pnpm run compile  # tsc --build (must run before backend compiles/tests)
 pnpm run test     # Vitest unit tests
@@ -102,6 +108,7 @@ pnpm run ci       # tsc --noEmit + lint + prettier
 ## Architecture
 
 ### Monorepo Layout
+
 ```
 app/
   backend-ts/     Express 5 + Dapr sidecar backend
@@ -119,20 +126,22 @@ scaffolds/        Code generators for new services
 
 ### Service Ports (when stack is running)
 
-| Service | Host Port | Access |
-|---|---|---|
-| Next.js SSR frontend | 3000 | `http://localhost:3000` |
-| Swagger UI | 3001 | `http://localhost:3001/docs` |
-| Backend API (direct) | 3001 | `http://localhost:3001/api/v1/todos` |
-| Backend API (via Dapr) | 3500 | `http://localhost:3500/v1.0/invoke/backend-ts/method/...` |
-| PostgreSQL | 5432 | |
-| Redis | 6379 | |
-| Zipkin | 9411 | `http://localhost:9411` |
-| Dapr Dashboard | 8888 | `http://localhost:8888` |
-| Grafana OTEL (if enabled) | 3200 | `http://localhost:3200` |
+| Service                   | Host Port | Access                                                    |
+| ------------------------- | --------- | --------------------------------------------------------- |
+| Next.js SSR frontend      | 3000      | `http://localhost:3000`                                   |
+| Swagger UI                | 3001      | `http://localhost:3001/docs`                              |
+| Backend API (direct)      | 3001      | `http://localhost:3001/api/v1/todos`                      |
+| Backend API (via Dapr)    | 3500      | `http://localhost:3500/v1.0/invoke/backend-ts/method/...` |
+| PostgreSQL                | 5432      |                                                           |
+| Redis                     | 6379      |                                                           |
+| Zipkin                    | 9411      | `http://localhost:9411`                                   |
+| Dapr Dashboard            | 8888      | `http://localhost:8888`                                   |
+| Grafana OTEL (if enabled) | 3200      | `http://localhost:3200`                                   |
 
 ### Dapr Sidecar Pattern
+
 Every backend service runs as two containers: the app + a Dapr sidecar. The sidecar proxies all inter-service communication:
+
 - **State**: Redis via `DAPR_HOST:DAPR_PORT` (default 3500)
 - **Pub/Sub**: Redis topic `todo-data`, subscribers receive CloudEvents at `/consumer/*` endpoints
 - **Service Invocation**: `http://DAPR_HOST:DAPR_PORT/v1.0/invoke/<app-id>/method/<path>`
@@ -142,19 +151,24 @@ In Docker Compose, `DAPR_HOST=0.0.0.0` for backends; `DAPR_HOST=127.0.0.1` for f
 **Frontend → Backend calls**: Next.js does NOT call backend HTTP directly. It uses `DaprClient.invoker.invoke()` targeting the backend's Dapr app-id (`backend-ts`). See `app/web-nextjs/src/services/backend-ts.ts`.
 
 ### Shared SDK (`@sos/sdk`)
+
 The SDK is the core abstraction layer. Key patterns:
+
 - `buildServiceContext()` — creates context with logger, DB client, Dapr client; used at service startup. Fetches secrets from Dapr secretstore to configure DB credentials.
 - `buildHandlerContext()` — enriches context per request handler (dependency injection pattern)
 - `Context<K>` — generic type-safe service context parameterized by API kind (`K`)
 - Modules: `Api`, `Dapr`, `Db`, `State`, `PubSub`, `Secrets`, `Cache`, `Consumer`, `Invoke`, `Metrics`
 
 ### Backend Layering (handler → service → model)
+
 Each backend feature follows a strict three-layer architecture:
+
 - **Handler** (`src/handlers/api/`) — express-zod-api endpoint. Defines Zod input/output schemas, calls service, wraps response with `buildResponse()`. Each handler function takes `Context` and returns an endpoint.
 - **Service** (`src/services/`) — business logic. Orchestrates DB transactions, state cache invalidation (`State.destroy`), and pub/sub publishing (`PubSub.publish`). Write operations use Knex transactions with explicit commit/rollback.
 - **Model** (`src/models/`) — database access via Knex query builder. Maps between DB column names (`snake_case`) and API model names (`camelCase`) via `asModel()` functions. Soft deletes via `deleted_at` column — queries filter `WHERE deleted_at IS NULL`.
 
 ### API Layer (backend-ts)
+
 - `express-zod-api` for type-safe routing with Zod schemas for all input/output
 - Express listens on a Unix socket (`/tmp/express-*.sock`); Dapr sidecar manages the external port
 - `endpointsFactory` adds helmet, auth middleware, request ID, and metrics to every endpoint
@@ -163,29 +177,34 @@ Each backend feature follows a strict three-layer architecture:
 - API responses use a standard envelope: `{ apiVersion, data, error }` — see `Api.buildResponse()`
 
 ### State & Pub/Sub Patterns
+
 - **Read-through cache**: On `getById`, save to Redis state store after DB fetch. On writes, destroy the cache key to invalidate.
 - **Event publishing**: All write operations (create/update/delete) publish to `todo-data` topic for downstream consumers.
 - Cache keys follow format: `<stateName>:<tableName>:<id>`
 
 ### Database
+
 - PostgreSQL 18 with Knex.js for migrations and query building
 - Schema per service: `backend_ts` (prod), `backend_ts_test` (integration tests) — the `_test` suffix is auto-appended when `NODE_ENV=test`
 - Migrations live in `app/backend-ts/src/db/migrations/`
 - DB credentials come from Dapr secretstore (not env vars) — see `buildServiceContext()` in SDK
 
 ### Testing (three-layer pyramid)
+
 - **Unit** (`make test`, seconds): `*.test.ts` — Vitest with mocked Dapr and SDK context (see `vitest.setup.ts`). Covers backend-ts, SDK, and web-nextjs (`services/backend-ts.test.ts` covers the Dapr invoker path with mocked `DaprClient`).
-- **Integration** (`make test-integration`, tens of seconds): `*.integration.test.ts` — real Postgres + Dapr sidecar. Tables truncated between tests. `maxConcurrency: 1` to avoid DB race conditions.
+- **Integration** (`make integration-test`, tens of seconds): `*.integration.test.ts` — real Postgres + Dapr sidecar. Tables truncated between tests. `maxConcurrency: 1` to avoid DB race conditions.
 - **E2E** (`make e2e`, minutes): `e2e/e2e-test.sh` — compose-based smoke. Brings up the full stack, exercises backend direct + via Dapr sidecar, verifies 5 service endpoints (Next.js SSR, Swagger, Dapr Dashboard, Zipkin, Grafana), asserts scheduler TCP reachability, covers negative cases (401 no-auth, 404 nonexistent). Optional browser layer: `make e2e-browser` (Playwright against `localhost:3000`).
-- **Markdown / diagrams** (`make mermaid-lint`, seconds): validates every `` ```mermaid `` block in `README.md` / `CLAUDE.md` / `docs/*.md` via pinned `minlag/mermaid-cli` (same engine GitHub renders with). Wired into `make lint` — catches broken Mermaid diagrams before they silently break README rendering on github.com.
+- **Markdown / diagrams** (`make mermaid-lint`, seconds): validates every ` ```mermaid ` block in `README.md` / `CLAUDE.md` / `docs/*.md` via pinned `minlag/mermaid-cli` (same engine GitHub renders with). Wired into `make lint` — catches broken Mermaid diagrams before they silently break README rendering on github.com.
 - Framework: Vitest 4 with supertest for HTTP testing
 - Test helpers: `getAuthHeader()` generates JWT tokens, `expectApiDataResponse()`/`expectApiError()` for assertions
 
 ### CI Pipeline (`.github/workflows/ci.yml`)
+
 Each CI job delegates to a Makefile target. The `changes` detector (using `dorny/paths-filter`) gates heavy jobs so doc-only PRs skip the build/test matrix while still triggering the workflow (Repository Rulesets gating on `ci-pass` are satisfied either way). Job order:
+
 1. **changes**: detect whether the PR touches code (vs. docs/images only)
 2. **build** (`make sdk-ci`): compile + lint + unit-test the SDK; upload `sdk-build` artifact
-3. **static-check** (`make static-check`, depends on build): composite gate — `lint` + `vulncheck` + `secrets` (gitleaks) + `trivy-fs` + `mermaid-lint`
+3. **static-check** (`make static-check`, depends on build): composite gate — `lint` (which includes `mermaid-lint`) + `vulncheck` + `secrets` (gitleaks) + `trivy-fs`
 4. **test** (`make backend-test`, depends on build): backend unit tests with coverage
 5. **integration-test** (`make backend-test-integration`, depends on build): Postgres service + Dapr sidecar, real DB, real Dapr
 6. **web-nextjs** (`make web-nextjs-ci`, depends on changes): lint + Vitest + Next.js production build
@@ -193,9 +212,11 @@ Each CI job delegates to a Makefile target. The `changes` detector (using `dorny
 8. **ci-pass**: aggregate gate — fails if any of the above failed or was cancelled
 
 ### Port allocation in CI / parallel runs
+
 Service ports default to the values in `.env.example` (3000, 3001, 3500, …). For parallel test runs on the same host (two local runs, parallel CI jobs), use `scripts/pick-port.sh` (returns one free port) or `scripts/write-env-ports.sh` (writes an env file or `$GITHUB_ENV` with free ports for every service). Node code reads all ports from `process.env.*` — see `app/backend-ts/src/config.ts` and `app/web-nextjs/src/config.ts`. Never hardcode a port in new code.
 
 ### Observability
+
 - **Logging**: Pino with structured JSON; log level via `LOG_LEVEL` env var
 - **Tracing**: OpenTelemetry SDK auto-instrumentation, exported to Zipkin (port 9411) and OTLP endpoint
 - **Metrics**: Per-endpoint counters and timers via `@sos/sdk` metrics module, recorded in `apiResultsHandler`
@@ -203,51 +224,59 @@ Service ports default to the values in `.env.example` (3000, 3001, 3500, …). F
 
 ## Key Environment Variables
 
-| Variable | Service | Default | Notes |
-|---|---|---|---|
-| `SERVICE_NAME` | backend | `backend-ts` | Dapr app-id |
-| `DAPR_HOST` | all | `localhost` | Sidecar host |
-| `DAPR_PORT` | all | `3500` | Sidecar HTTP port |
-| `JWT_SECRET_KEY` | backend, web-nextjs | `secret` | JWT signing key |
-| `DB_HOST/PORT/NAME/SCHEMA` | backend | postgres/5432/postgres/backend_ts | |
-| `OTLP_ENDPOINT` | all | — | OpenTelemetry collector URL |
-| `NODE_ENV` | all | `development` | `test` appends `_test` to DB schema |
+| Variable                   | Service             | Default                           | Notes                               |
+| -------------------------- | ------------------- | --------------------------------- | ----------------------------------- |
+| `SERVICE_NAME`             | backend             | `backend-ts`                      | Dapr app-id                         |
+| `DAPR_HOST`                | all                 | `localhost`                       | Sidecar host                        |
+| `DAPR_PORT`                | all                 | `3500`                            | Sidecar HTTP port                   |
+| `JWT_SECRET_KEY`           | backend, web-nextjs | `secret`                          | JWT signing key                     |
+| `DB_HOST/PORT/NAME/SCHEMA` | backend             | postgres/5432/postgres/backend_ts |                                     |
+| `OTLP_ENDPOINT`            | all                 | —                                 | OpenTelemetry collector URL         |
+| `NODE_ENV`                 | all                 | `development`                     | `test` appends `_test` to DB schema |
 
 ## Workflow Rules
 
 ### Before Every Commit
+
 Always verify locally before committing and pushing. All Makefile targets must pass:
+
 ```bash
 make compile           # compile SDK + backend TypeScript
 make lint              # lint + typecheck + prettier + hadolint + mermaid + scripts +x guard
-make static-check      # composite gate (lint + vulncheck + secrets + trivy-fs + mermaid-lint)
+make static-check      # composite gate (lint [includes mermaid-lint] + vulncheck + secrets + trivy-fs)
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (static-check + test + build)
-make ci-run            # run GitHub Actions workflow locally via act (skips e2e — needs DinD)
+make ci-run            # run GitHub Actions workflow locally via act (skips e2e/mermaid-lint/secrets — see notes)
 make build             # rebuild service containers
 make up -d             # start the stack (detached)
 make integration-test  # integration tests (requires running stack)
 ```
+
 Verify all URLs from the README "Start, test, stop" section are reachable and return expected results:
+
 - `http://localhost:3000` — Next.js SSR frontend loads HTML
 - `http://localhost:3001/docs` — Swagger UI loads in browser
 - `http://localhost:8888` — Dapr Dashboard loads
 - `http://localhost:9411` — Zipkin tracing loads
 
 Verify the "Calling the Backend API" section works:
+
 ```bash
 TOKEN=$(node -e "console.log(require('jsonwebtoken').sign({sub:'dev-user'}, 'secret'))")
 curl -sf -H "Authorization: Bearer $TOKEN" http://localhost:3001/api/v1/todos
 curl -sf -H "Authorization: Bearer $TOKEN" http://localhost:3500/v1.0/invoke/backend-ts/method/api/v1/todos
 ```
+
 Both should return a JSON response with `apiVersion` and `data`.
 
 After pushing, watch the remote CI run to confirm it passes:
+
 ```bash
 gh run watch           # watch the latest CI run
 ```
 
 ### Keep Documentation Up to Date
+
 After any code or configuration change, review and update the project's `*.md` files if affected. This includes `README.md`, `CLAUDE.md`, service READMEs, and docs in `docs/`. Version numbers, command references, architecture descriptions, and environment variable tables must stay in sync with the code.
 
 ## Adding a New Service
@@ -257,6 +286,7 @@ See `docs/create-new-service.md` and use the scaffolds in `scaffolds/` directory
 ### Dockerfile Base Image Strategy
 
 Two patterns coexist by design:
+
 - **Prod Dockerfiles** (`Dockerfile`) — use `node:24-alpine@sha256:...` pinned digest. Renovate auto-updates these. No `make setup` needed.
 - **Dev Dockerfiles** (`Dockerfile.dev`) — use `microservice-build` or `microservice-sdk-build` local images (built via `make setup`). These inject corporate certificates and pre-compile the SDK for the monorepo workspace pattern.
 
@@ -268,16 +298,21 @@ Items from upgrade analyses that need monitoring or future action:
 - [ ] **pg (node-postgres)** — solo maintainer (Brian Carlson), 500+ open issues; healthy but bus-factor risk — monitor for succession or fork activity (carried from 2026-04-05)
 - [ ] **Azure Postgres Flexible Server at PG 17** — local dev runs PG 18; bump the `infra/azure` default when Azure adds PG 18 support.
 - [x] **Next.js `/_global-error` / `/_not-found` prerender crashes** — fixed 2026-04-16 by removing `NODE_ENV=development` from `.mise.toml [env]` (jdx/mise-action was leaking it into CI job env, overriding `next build`'s internal `NODE_ENV=production`). User-defined `app/global-error.tsx` + `app/not-found.tsx` kept as defense-in-depth + prod error UX. Upstream [vercel/next.js#87719](https://github.com/vercel/next.js/issues/87719) still open; watch for regressions in future Next.js minors.
+- [x] **web-nextjs integration test layer** — added 2026-05-01 as the compose-attached pattern (option B). Tests live in `app/web-nextjs/src/**/*.integration.test.ts`, run via `make web-nextjs-integration` (or directly: `pnpm --filter web-nextjs run test:integration`), and `fetch()` against `http://localhost:${NEXTJS_PORT:-3000}` with a session cookie minted via `/api/auth`. Each suite probes the stack first via `isStackReachable()` and skips cleanly if `make up -d` hasn't been run. This exercises Next.js route → `verifySession()` → `BackendTs.getAll()` (real DaprClient) → web-nextjs sidecar → backend-ts sidecar → Express → Postgres — closes the gap between unit-mocked tests and Playwright e2e.
+- [ ] **PR #153 — comprehensive hardening pass (in flight)** — 5-commit sweep from a multi-skill review (`/project-review`, `/harden-image-pipeline`, `/test-coverage-analysis`, `/architecture-diagrams`, `/makefile`, `/renovate`, `/readme`, `/claude`, `/ship-it`) on 2026-05-01/02. ~150 findings applied across ~70 files. Latest CI run on `bef5e54` is **6/9 green** (changes, static-check, build, test, integration-test, web-nextjs); **3 still red** (docker × 2, e2e). Stopped at iteration 4 per `/ship-it` 3-iteration rule. Resume options: (a) iteration 5 — fetch failing-job logs + diagnose, (b) mark PR ready and triage manually, (c) revert the docker job's multi-arch validation build (and DAST step in `e2e`) — falls back to single-arch + Trivy + smoke only.
+- [ ] **act-skip guards** — added 2026-05-02 to `make mermaid-lint` (DinD bind-mount limitation), `make secrets` (gitleaks allowlist regex behaves differently in act runner), and `download-artifact` step in `ci.yml` (act's local artifact server panics on download). All guards are no-ops on real GitHub runners; they only short-circuit when `$ACT == 'true'` or `vars.ACT == 'true'`. Watch for parity drift if real CI starts failing where act now passes.
+- [ ] **GH_ACCESS_TOKEN exposure (2026-05-02)** — `make ci-run`'s `act push --secret KEY=$VALUE` form puts the token value in argv, where `ps -ef` exposes it to any local user. Token leaked into a session log on 2026-05-02 — rotate at next opportunity. Future fix: the Makefile recipe should use `--secret KEY` (env-only, no value in argv) instead of `--secret KEY=$VALUE`.
+- [x] **e2e pub/sub probes — apiVersion typo (2026-05-02)** — fixed: `app/backend-ts/dapr/components/subscriptions.yaml` had `apiVersion: dapr.io/v2alpha` (the scaffold template correctly uses `v2alpha1`). Dapr 1.17.6 silently ignored the file because the apiVersion didn't match anything it recognized — `Loading Declarative Subscriptions…` was followed by zero subscription registrations, so the consumer endpoint was never bound to the `todo-data` topic. Both the round-trip and pub/sub-negative probes failed in CI for this reason; the trace-propagation probe remains a separate WARN (OTel context propagation through the Dapr invoker is a known gap). The two pub/sub probes are now restored to FAIL since they're a real signal once the subscription works.
 
 ## Skills
 
 Use the following skills when working on related files:
 
-| File(s) | Skill |
-|---------|-------|
-| `Makefile` | `/makefile` |
-| `renovate.json` | `/renovate` |
-| `README.md` | `/readme` |
+| File(s)                          | Skill          |
+| -------------------------------- | -------------- |
+| `Makefile`                       | `/makefile`    |
+| `renovate.json`                  | `/renovate`    |
+| `README.md`                      | `/readme`      |
 | `.github/workflows/*.{yml,yaml}` | `/ci-workflow` |
 
 When spawning subagents, always pass conventions from the respective skill into the agent's prompt.

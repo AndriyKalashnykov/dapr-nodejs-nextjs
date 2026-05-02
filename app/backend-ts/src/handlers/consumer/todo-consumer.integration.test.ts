@@ -38,5 +38,29 @@ describe('Integration: Todo Consumer', () => {
       });
       expect(res.status).toBe(200);
     });
+
+    // Real Dapr deliveries arrive with a full CloudEvent envelope and
+    // `Content-Type: application/cloudevents+json`. The flat `{id, data}` body
+    // above tests the route + zod schema; this case exercises the JSON parser
+    // branch in `server.ts` that sniffs `cloudevents+json` and re-parses.
+    it('accepts a full CloudEvent envelope (application/cloudevents+json)', async () => {
+      const cloudEvent = {
+        specversion: '1.0',
+        type: 'com.dapr.event.sent',
+        source: 'integration-test',
+        id: randomUUID(),
+        datacontenttype: 'application/json',
+        time: new Date().toISOString(),
+        topic: 'todo-data',
+        pubsubname: 'redis-pubsub',
+        data: todo,
+      };
+      const res = await request(app)
+        .post('/consumer/todo')
+        .set('Content-Type', 'application/cloudevents+json')
+        .send(cloudEvent);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'SUCCESS' });
+    });
   });
 });

@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
   workflow_call:
 
@@ -15,74 +15,48 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Force CONTAINER_CMD=docker for every job. ubuntu-latest runners ship with
+# podman BEFORE docker on PATH, so the Makefile's
+# `command -v podman 2>/dev/null || echo docker` picks podman, which tags
+# images with a `localhost/` prefix that the docker daemon (used by
+# trivy-action, our smoke test, and `docker compose` in the e2e job)
+# cannot see. Fix at the workflow level so every job inherits.
+env:
+  CONTAINER_CMD: docker
+
 jobs:
   # ── Path filter ────────────────────────────────────────────────────────────
   # Detect whether the change touches code (vs. docs-only). Heavy jobs gate on
-  # `needs.changes.outputs.run_heavy == 'true'` so doc-only PRs skip the
-  # build/test matrix entirely while still passing the `ci-pass` gate
-  # (Repository Rulesets require the workflow to RUN, not just to be skipped —
-  # see `/ci-workflow` skill, "Path-Filter Strategy").
+  # `needs.changes.outputs.code == 'true'` so doc-only PRs skip the build/test
+  # matrix entirely while still passing the `ci-pass` gate (Repository Rulesets
+  # require the workflow to RUN, not just to be skipped — see `/ci-workflow`
+  # skill, "Path-Filter Strategy"). Tag pushes always fall through (release).
   changes:
-    name: changes
     runs-on: ubuntu-latest
     timeout-minutes: 2
     outputs:
-      run_heavy: ${{ steps.compute.outputs.run_heavy }}
+      code: ${{ steps.filter.outputs.code }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      # `predicate-quantifier: every` is required for the `!pattern`
-      # negations to behave as exclusions. With the default `some`, a file
-      # is considered "matching" if ANY pattern in the filter matches —
-      # so `'**'` would match every file and the `'!**.md'` lines never
-      # exclude anything. With `every`, EVERY pattern must match, so the
-      # `!**.md` exclusion takes effect for `.md` files.
+      # Canonical negated-extglob form (per /ci-workflow skill §"Path-Filter
+      # Strategy"): a single negative pattern matches everything that ISN'T
+      # docs/assets, then `CLAUDE.md` is re-included as a positive pattern
+      # since it conventionally trips heavy jobs (agent guidance changes).
       - name: Detect code changes
         id: filter
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         with:
-          predicate-quantifier: every
           filters: |
             code:
-              - '**'
-              - '!**.md'
-              - '!docs/**'
-              - '!specs/**'
-              - '!LICENSE'
-              - '!.gitignore'
-              - '!.claudeignore'
-              - '!.claude/**'
-              - '!benchmarks/**'
-              - '!**.png'
-              - '!**.jpg'
-              - '!**.gif'
-              - '!**.svg'
-            claude_md:
+              - '!(**.md|docs/**|specs/**|LICENSE|.gitignore|.claudeignore|.claude/**|benchmarks/**|**.png|**.jpg|**.gif|**.svg)'
               - 'CLAUDE.md'
-
-      # CLAUDE.md is a re-include over the `**.md` exclusion above —
-      # changes to it should still trigger the heavy jobs (project
-      # conventions / agent guidance). With `every`, we can't express
-      # the re-include inside a single filter, so OR the two filter
-      # outputs into a combined `run_heavy` signal.
-      - name: Compute run_heavy
-        id: compute
-        env:
-          CODE: ${{ steps.filter.outputs.code }}
-          CLAUDE_MD: ${{ steps.filter.outputs.claude_md }}
-        run: |
-          if [[ "$CODE" == "true" || "$CLAUDE_MD" == "true" ]]; then
-            echo "run_heavy=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_heavy=false" >> "$GITHUB_OUTPUT"
-          fi
 
   # ── Build (SDK compile + lint + test → upload artifact) ────────────────────
   build:
-    name: build
     needs: [changes]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -106,7 +80,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Build SDK
+      - name: Build
         run: make sdk-ci
 
       - name: Upload SDK build artifact
@@ -118,10 +92,12 @@ jobs:
           retention-days: 1
 
   # ── Static check (lint + vulncheck + secrets + trivy-fs + mermaid-lint) ────
+  # Runs in parallel with `build` — `make static-check` invokes the lint
+  # target which has `sdk-compile` as a prerequisite, so this job compiles
+  # the SDK itself rather than downloading the `build` job's artifact.
   static-check:
-    name: static-check
-    needs: [changes, build]
-    if: needs.changes.outputs.run_heavy == 'true'
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -145,20 +121,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Download SDK build artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: sdk-build
-          path: packages/@sos/sdk/build
-
       - name: Static check
         run: make static-check
 
   # ── Unit tests (backend) ───────────────────────────────────────────────────
   test:
-    name: test
     needs: [changes, build]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -184,20 +153,25 @@ jobs:
 
       - name: Download SDK build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        # continue-on-error: act's local artifact server panics under load
+        # (`http: panic serving: open /tmp/.../1: no such file or directory`).
+        # Real GitHub Actions artifact storage is reliable, so this flag is a
+        # no-op there. Under act, the next step's Makefile target falls back
+        # to `make sdk-compile` if the artifact didn't materialise.
+        continue-on-error: true
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      - name: Run unit tests
+      - name: Test
         run: make backend-test
         env:
           SERVICE_NAME: backend-ts
 
   # ── Integration tests (backend + Postgres + Dapr sidecar) ──────────────────
   integration-test:
-    name: integration-test
     needs: [changes, build]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -236,6 +210,12 @@ jobs:
 
       - name: Download SDK build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        # continue-on-error: act's local artifact server panics under load
+        # (`http: panic serving: open /tmp/.../1: no such file or directory`).
+        # Real GitHub Actions artifact storage is reliable, so this flag is a
+        # no-op there. Under act, the next step's Makefile target falls back
+        # to `make sdk-compile` if the artifact didn't materialise.
+        continue-on-error: true
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
@@ -243,7 +223,7 @@ jobs:
       - name: Set up Dapr CLI
         uses: dapr/setup-dapr@8d980918fd43a2765c143ce7f687665b2d46a6b9 # v2
         with:
-          version: '1.17.0'
+          version: "1.17.0"
 
       - name: Bring up Dapr sidecar
         run: make ci-dapr-up
@@ -251,24 +231,24 @@ jobs:
       - name: Prepare test schema
         run: make ci-db-prepare
 
-      - name: Run integration tests
+      - name: Integration test
         run: make backend-test-integration
         env:
           NODE_ENV: test
           SERVICE_NAME: backend-ts
           DB_HOST: localhost
-          DB_PORT: '5432'
+          DB_PORT: "5432"
           DB_NAME: postgres
           DB_SCHEMA: backend_ts
           JWT_SECRET_KEY: secret
           DAPR_HOST: localhost
-          DAPR_PORT: '3500'
+          DAPR_PORT: "3500"
 
   # ── Web (Next.js lint + test + production build) ───────────────────────────
+  # Doesn't depend on @sos/sdk so no artifact download — runs parallel with build.
   web-nextjs:
-    name: web-nextjs
     needs: [changes]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -297,9 +277,8 @@ jobs:
 
   # ── E2E (full stack via docker compose) ────────────────────────────────────
   e2e:
-    name: e2e
     needs: [changes, integration-test, web-nextjs]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -325,29 +304,47 @@ jobs:
 
       - name: Download SDK build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        # continue-on-error: act's local artifact server panics under load
+        # (`http: panic serving: open /tmp/.../1: no such file or directory`).
+        # Real GitHub Actions artifact storage is reliable, so this flag is a
+        # no-op there. Under act, the next step's Makefile target falls back
+        # to `make sdk-compile` if the artifact didn't materialise.
+        continue-on-error: true
         with:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      # The e2e smoke script uses `node -e "require('jsonwebtoken')..."` to
-      # forge a dev JWT. Install workspace deps on the runner so the require
-      # resolves (containers have their own node_modules; the runner doesn't).
-      - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build microservice base images
-        run: |
-          docker build ./shared/microservice -t microservice-build
-          docker build -f Dockerfile.dev -t microservice-sdk-build .
+      # No `make install` needed — e2e-test.sh forges JWTs via openssl,
+      # so the runner doesn't need workspace pnpm deps. The compose images
+      # have their own node_modules baked in.
+      - name: Build base images
+        run: make setup
 
       - name: Build service images
-        run: docker compose build --parallel
+        run: make build
 
       - name: Start stack
         run: docker compose up -d
 
       - name: Run end-to-end tests
         run: bash e2e/e2e-test.sh
+
+      # DAST gate (OWASP ZAP baseline) — runs against the same compose stack
+      # rather than a separate runner image. ZAP version is pinned in the
+      # Makefile (ZAP_VERSION constant); `-I` makes the scan warn-only on WARN
+      # findings, blocking only on FAIL severity. Report uploaded as artifact.
+      - name: DAST scan (ZAP baseline)
+        if: ${{ vars.ACT != 'true' }}
+        run: make dast
+
+      - name: Upload DAST report
+        if: ${{ always() && vars.ACT != 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: zap-baseline-report
+          path: zap-output/
+          retention-days: 30
+          if-no-files-found: ignore
 
       - name: Dump container logs on failure
         if: failure()
@@ -357,15 +354,15 @@ jobs:
         if: always()
         run: docker compose down -v
 
-  # ── Docker (build + Trivy scan, no push) ───────────────────────────────────
-  # Builds the production Dockerfiles and scans the resulting images on every
-  # push. Catches base-image CVEs, Dockerfile misconfigurations, and secret
-  # leaks BEFORE they ship via the manual `e2e-aca` deploy. Images are not
-  # pushed anywhere — actual registry pushes happen in `e2e-aca.yml`.
+  # ── Docker (Pattern A pre-push hardening, no push) ─────────────────────────
+  # Pattern A "build twice" gates per /harden-image-pipeline:
+  #   1. Single-arch (amd64) load → Trivy image scan + smoke test
+  #   2. Multi-arch validation build (push: false) — catches arm64 cross-
+  #      compile regressions on the commit that introduced them
+  # Images are NOT pushed here; actual registry pushes happen in `e2e-aca.yml`.
   docker:
-    name: docker
-    needs: [changes]
-    if: needs.changes.outputs.run_heavy == 'true'
+    needs: [changes, static-check, build, test]
+    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -382,36 +379,89 @@ jobs:
           install: true
           cache: true
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      - name: Build production image
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ matrix.service }}
+          tags: |
+            type=sha,prefix=,format=long
+          flavor: |
+            latest=false
+
+      # Gate 1 — single-arch load for scanning + smoke testing.
+      - name: Build image for scan
         run: make image-build-prod
         env:
           SERVICE: ${{ matrix.service }}
           IMAGE_TAG: ${{ github.sha }}
 
+      # Gate 2 — Trivy image scan against the loaded image.
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ matrix.service }}:${{ github.sha }}
-          scanners: 'vuln,secret,misconfig'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          scanners: "vuln,secret,misconfig"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
           ignore-unfixed: true
           trivyignores: ./.trivyignore.yaml
 
+      # Gate 3 — boot the image and grep logs for a known startup marker.
+      - name: Smoke test
+        run: make image-smoke-test
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: ${{ github.sha }}
+
+      # Gate 4 — multi-arch validation (push: false). Catches arm64 cross-
+      # compile regressions before the manual `e2e-aca.yml` workflow tries to
+      # push to ACR. ~95% cache-hit from Gate 1 via type=gha.
+      - name: Multi-arch validation build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v7.0.0
+        with:
+          context: .
+          file: app/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ── Gate ───────────────────────────────────────────────────────────────────
   ci-pass:
-    name: ci-pass
     if: always()
-    needs: [changes, build, static-check, test, integration-test, web-nextjs, e2e, docker]
+    needs:
+      [
+        changes,
+        build,
+        static-check,
+        test,
+        integration-test,
+        web-nextjs,
+        e2e,
+        docker,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify all jobs passed
+      - name: Fail if any upstream job failed
+        if: contains(needs.*.result, 'failure')
         run: |
-          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "One or more jobs failed or were cancelled"
-            exit 1
-          fi
+          echo "One or more jobs failed"
+          exit 1
+
+      - name: Fail if any upstream job was cancelled
+        if: contains(needs.*.result, 'cancelled')
+        run: |
+          echo "One or more jobs were cancelled"
+          exit 1

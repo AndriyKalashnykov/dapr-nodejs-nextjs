@@ -20,17 +20,29 @@ JWT_SECRET="${JWT_SECRET_KEY:-secret}"
 
 PASS=0
 FAIL=0
+WARN=0
 FAILURES=()
+WARNINGS=()
 
 record() {
-  if [[ "$1" == "PASS" ]]; then
-    echo "  ✓ $2"
-    PASS=$((PASS + 1))
-  else
-    echo "  ✗ $2"
-    FAIL=$((FAIL + 1))
-    FAILURES+=("$2")
-  fi
+  case "$1" in
+    PASS)
+      echo "  ✓ $2"
+      PASS=$((PASS + 1))
+      ;;
+    WARN)
+      # Non-blocking observation — known-flaky probe. Kept in the suite so we
+      # notice if the underlying behavior changes, but doesn't fail the run.
+      echo "  ! $2"
+      WARN=$((WARN + 1))
+      WARNINGS+=("$2")
+      ;;
+    *)
+      echo "  ✗ $2"
+      FAIL=$((FAIL + 1))
+      FAILURES+=("$2")
+      ;;
+  esac
 }
 
 assert_http() {
@@ -61,7 +73,17 @@ assert_json_field() {
 }
 
 make_jwt() {
-  node -e "console.log(require('jsonwebtoken').sign({sub:'e2e-user'}, '${JWT_SECRET}'))"
+  # Forge an HS256 JWT using only openssl + base64 — no Node, no jsonwebtoken,
+  # no runner-side language toolchain. Removes the runner's `pnpm install`
+  # dependency for e2e and matches what the backend's auth middleware accepts.
+  local header_b64 payload_b64 unsigned signature
+  # base64url: standard base64 with -/_ swapped and trailing = stripped.
+  b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+  header_b64=$(printf '%s' '{"alg":"HS256","typ":"JWT"}' | b64url)
+  payload_b64=$(printf '%s' '{"sub":"e2e-user"}' | b64url)
+  unsigned="${header_b64}.${payload_b64}"
+  signature=$(printf '%s' "$unsigned" | openssl dgst -binary -sha256 -hmac "$JWT_SECRET" | b64url)
+  printf '%s.%s' "$unsigned" "$signature"
 }
 
 wait_for() {
@@ -105,10 +127,19 @@ fi
 echo
 
 echo "[4/8] Auth / negative cases..."
-assert_http "Unauthenticated todos → 401" \
+assert_http "Unauthenticated todos (direct) → 401" \
   "http://localhost:${BACKEND_PORT}/api/v1/todos" 401
-assert_http "Nonexistent todo → 404" \
+assert_http "Nonexistent todo (direct) → 404" \
   "http://localhost:${BACKEND_PORT}/api/v1/todos/00000000-0000-0000-0000-000000000000" \
+  404 GET "" "$(make_jwt)"
+# Mirror the same negatives via the Dapr sidecar — catches misconfigured
+# app-id, sidecar header stripping, and ACL/middleware regressions that
+# would only surface on the sidecar code path.
+DAPR_INVOKE_BASE="http://localhost:${DAPR_PORT}/v1.0/invoke/${BACKEND_APP_ID}/method"
+assert_http "Unauthenticated todos (via Dapr) → 401" \
+  "${DAPR_INVOKE_BASE}/api/v1/todos" 401
+assert_http "Nonexistent todo (via Dapr) → 404" \
+  "${DAPR_INVOKE_BASE}/api/v1/todos/00000000-0000-0000-0000-000000000000" \
   404 GET "" "$(make_jwt)"
 echo
 
@@ -124,6 +155,22 @@ CREATE_RESP=$(curl -sf -X POST \
   "http://localhost:${BACKEND_PORT}/api/v1/todos" 2>/dev/null || echo '')
 if echo "$CREATE_RESP" | grep -q '"id"'; then
   record PASS "Create todo (direct) returns id"
+  # Response shape: assert envelope and todo fields per skill recommendation
+  if echo "$CREATE_RESP" | grep -q '"apiVersion"'; then
+    record PASS "Create response has apiVersion envelope"
+  else
+    record FAIL "Create response missing apiVersion envelope: ${CREATE_RESP:0:120}"
+  fi
+  if echo "$CREATE_RESP" | grep -q '"completed":false'; then
+    record PASS "Create response has completed=false"
+  else
+    record FAIL "Create response missing completed=false: ${CREATE_RESP:0:120}"
+  fi
+  if echo "$CREATE_RESP" | grep -qE '"createdAt":"[0-9]{4}-[0-9]{2}-[0-9]{2}T'; then
+    record PASS "Create response has ISO-8601 createdAt"
+  else
+    record FAIL "Create response missing ISO createdAt: ${CREATE_RESP:0:120}"
+  fi
   TODO_ID=$(echo "$CREATE_RESP" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).data.id)}catch{console.log('')}})")
 else
   record FAIL "Create todo (direct) — no id in response: ${CREATE_RESP:0:120}"
@@ -133,6 +180,14 @@ fi
 if [[ -n "$TODO_ID" ]]; then
   assert_http "Get todo by id (direct)" \
     "http://localhost:${BACKEND_PORT}/api/v1/todos/${TODO_ID}" 200 GET "" "$TOKEN"
+  # Update path coverage — both PUT and PATCH are registered for updateTodoById;
+  # a regression that drops one method would otherwise be silent.
+  assert_http "Update todo via PUT" \
+    "http://localhost:${BACKEND_PORT}/api/v1/todos/${TODO_ID}" 200 PUT \
+    '{"title":"e2e-test-todo-updated","completed":true}' "$TOKEN"
+  assert_http "Update todo via PATCH" \
+    "http://localhost:${BACKEND_PORT}/api/v1/todos/${TODO_ID}" 200 PATCH \
+    '{"title":"e2e-test-todo-patched"}' "$TOKEN"
   assert_http "Delete todo (direct)" \
     "http://localhost:${BACKEND_PORT}/api/v1/todos/${TODO_ID}" 200 DELETE "" "$TOKEN"
 fi
@@ -160,11 +215,13 @@ else
 fi
 echo
 
-echo "[7/8] OpenTelemetry trace propagation (backend-ts → Zipkin)..."
-# By this point sections 5–6 have generated CRUD requests against backend-ts,
-# which the OTel SDK auto-instrumentation should have exported to Zipkin.
-# Allow a short window for the spans to flush before querying the API.
-sleep 3
+echo "[7/8] OpenTelemetry trace propagation (web-nextjs → backend-ts → Zipkin)..."
+# Trigger an SSR request through the Next.js frontend so its OTel exporter
+# emits a trace that web-nextjs handed off to backend-ts via the Dapr
+# invoker — gives both services spans on the same traceId.
+curl -sf -o /dev/null --max-time 10 "http://localhost:${NEXTJS_PORT}" 2>/dev/null || true
+# Allow a short window for spans to flush before querying Zipkin.
+sleep 5
 TRACES_URL="http://localhost:${ZIPKIN_PORT}/api/v2/traces?serviceName=backend-ts&limit=50"
 TRACE_COUNT=$(curl -sf --max-time 5 "$TRACES_URL" 2>/dev/null \
   | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).length)}catch{console.log(0)}})" \
@@ -174,21 +231,101 @@ if [[ "$TRACE_COUNT" -gt 0 ]]; then
 else
   record FAIL "Zipkin returned 0 backend-ts traces (OTel pipeline likely broken)"
 fi
+# Cross-service propagation: any single trace should contain spans from
+# BOTH services if the Dapr invoker is propagating W3C traceparent headers.
+WEB_TRACES=$(curl -sf --max-time 5 \
+  "http://localhost:${ZIPKIN_PORT}/api/v2/traces?serviceName=web-nextjs&limit=20" 2>/dev/null || echo '[]')
+WEB_TRACE_IDS=$(echo "$WEB_TRACES" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const t=JSON.parse(d);console.log(t.flat().map(s=>s.traceId).filter((v,i,a)=>a.indexOf(v)===i).join(' '))}catch{console.log('')}})")
+PROPAGATED=0
+for tid in $WEB_TRACE_IDS; do
+  HITS=$(curl -sf --max-time 3 "http://localhost:${ZIPKIN_PORT}/api/v2/trace/${tid}" 2>/dev/null \
+    | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{const s=JSON.parse(d);const svcs=new Set(s.map(x=>x.localEndpoint?.serviceName).filter(Boolean));console.log(svcs.has('web-nextjs')&&svcs.has('backend-ts')?'1':'0')}catch{console.log('0')}})" \
+    || echo 0)
+  if [[ "$HITS" == "1" ]]; then PROPAGATED=1; break; fi
+done
+if [[ "$PROPAGATED" == "1" ]]; then
+  record PASS "Trace propagation web-nextjs → backend-ts (W3C traceparent)"
+else
+  # Non-blocking: SSR for the homepage may not actually call backend-ts, and
+  # OTel context propagation through the Dapr invoker is a known gap. Probe
+  # stays in the suite so a future fix is observable.
+  record WARN "Trace propagation web-nextjs → backend-ts not observed (non-blocking)"
+fi
 echo
 
-echo "[8/8] Dapr pub/sub publish via sidecar..."
-# Verify the redis-pubsub component is wired by publishing a CloudEvent
-# directly through the Dapr sidecar's publish API. A 204 response means
-# the sidecar accepted the event and dispatched it to Redis.
-PUBSUB_URL="http://localhost:${DAPR_PORT}/v1.0/publish/redis-pubsub/todo-data"
-PUBSUB_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
-  -X POST -H 'Content-Type: application/json' \
-  -d '{"event":"e2e-pubsub-probe"}' \
-  "$PUBSUB_URL" 2>/dev/null || echo '000')
-if [[ "$PUBSUB_STATUS" == "204" ]]; then
-  record PASS "Dapr publish to redis-pubsub/todo-data returned 204"
+echo "[8/8] Dapr pub/sub round-trip (publish → consumer)..."
+# Publish a CloudEvent directly through the Dapr sidecar's publish API. A 204
+# from the sidecar means the event was dispatched to Redis. We then poll
+# backend-ts logs for the "Consumer handling message" log line that the
+# todo-consumer emits when Dapr delivers the event to /consumer/todo —
+# this proves the FULL round-trip (publish → Redis → subscription →
+# subscriber endpoint), not just the publish API surface.
+PROBE_TITLE="e2e-pubsub-witness-$$"
+PROBE_TODO=$(curl -sf -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{\"title\":\"${PROBE_TITLE}\"}" \
+  "http://localhost:${BACKEND_PORT}/api/v1/todos" 2>/dev/null || echo '')
+if echo "$PROBE_TODO" | grep -q '"id"'; then
+  record PASS "Pub/sub probe: create todo (will publish to todo-data)"
+  # Wait up to 30s for the consumer to log handling of the event. Dapr
+  # Redis pub/sub propagation in DinD CI runners is meaningfully slower
+  # than local Podman — 10s was too tight.
+  WITNESS=0
+  for _ in $(seq 1 30); do
+    if docker compose logs --tail=200 backend-ts 2>/dev/null \
+        | grep -q 'Consumer handling message'; then
+      WITNESS=1; break
+    fi
+    sleep 1
+  done
+  if [[ "$WITNESS" == "1" ]]; then
+    record PASS "Pub/sub round-trip: consumer received event"
+  else
+    record FAIL "Pub/sub round-trip: no 'Consumer handling message' log within 30s"
+  fi
+  PROBE_ID=$(echo "$PROBE_TODO" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).data.id)}catch{console.log('')}})")
+  if [[ -n "$PROBE_ID" ]]; then
+    curl -s -o /dev/null --max-time 5 -X DELETE \
+      -H "Authorization: Bearer $TOKEN" \
+      "http://localhost:${BACKEND_PORT}/api/v1/todos/${PROBE_ID}" 2>/dev/null || true
+  fi
 else
-  record FAIL "Dapr publish to redis-pubsub/todo-data returned ${PUBSUB_STATUS} (expected 204)"
+  record FAIL "Pub/sub probe: could not create probe todo: ${PROBE_TODO:0:120}"
+fi
+
+# Negative path — publish a malformed CloudEvent directly through Dapr's
+# publish API. The consumer's input schema requires `title`; the framework's
+# zod validator rejects the payload before the handler's try/catch runs, so
+# the consumer returns DROP automatically. Dapr logs that drop in its own
+# sidecar log ("DROP status returned from app while processing pub/sub
+# event <id>") — that's the canonical witness, not the app's catch-block
+# log line.
+PROBE_ID="drop-probe-$$"
+PUBSUB_DROP_URL="http://localhost:${DAPR_PORT}/v1.0/publish/redis-pubsub/todo-data"
+DROP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+  -X POST -H 'Content-Type: application/cloudevents+json' \
+  -d '{"specversion":"1.0","type":"com.dapr.event.sent","source":"e2e-test","id":"'"${PROBE_ID}"'","data":{"not_title":"missing required field"}}' \
+  "$PUBSUB_DROP_URL" 2>/dev/null || echo '000')
+if [[ "$DROP_STATUS" == "204" ]]; then
+  record PASS "Pub/sub negative: malformed CloudEvent accepted by sidecar (204)"
+  # Wait up to 10s for the sidecar to log the DROP — DinD CI is slower than
+  # local Podman.
+  DROP_WITNESS=0
+  for _ in $(seq 1 10); do
+    if docker compose logs --tail=200 backend-ts-dapr 2>/dev/null \
+        | grep -q "DROP status returned from app while processing pub/sub event ${PROBE_ID}"; then
+      DROP_WITNESS=1; break
+    fi
+    sleep 1
+  done
+  if [[ "$DROP_WITNESS" == "1" ]]; then
+    record PASS "Pub/sub negative: sidecar logged DROP for ${PROBE_ID} (consumer rejected malformed event; no requeue storm)"
+  else
+    record FAIL "Pub/sub negative: sidecar did not log 'DROP status returned from app' for ${PROBE_ID} within 10s"
+  fi
+else
+  record FAIL "Pub/sub negative: sidecar returned ${DROP_STATUS} (expected 204)"
 fi
 echo
 

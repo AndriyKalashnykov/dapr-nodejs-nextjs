@@ -13,7 +13,7 @@
   "scripts": {
     "compile": "tsc --build",
     "ci": "tsc --noEmit && pnpm run lint && pnpm run prettier",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "lint:fix": "eslint --fix",
     "prettier": "prettier -c .",
     "prettier:fix": "prettier --write .",

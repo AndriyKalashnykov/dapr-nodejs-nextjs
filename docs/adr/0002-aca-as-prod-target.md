@@ -1,7 +1,7 @@
 # ADR 0002: Azure Container Apps as the production deploy target
 
 | Status   | Date       |
-|----------|------------|
+| -------- | ---------- |
 | Accepted | 2026-04-29 |
 
 ## Context
@@ -23,6 +23,7 @@ ACA injects and manages the Dapr sidecar from its own control plane.
 ## Consequences
 
 **Pros**
+
 - ACA ships a managed Dapr runtime — no separate Helm install of
   `dapr-system`, no placement / scheduler / operator pods to maintain.
 - External ingress is a single Terraform property; ACA auto-provisions
@@ -34,6 +35,7 @@ ACA injects and manages the Dapr sidecar from its own control plane.
   via private endpoints; ACA reaches them on private IPs only.
 
 **Cons**
+
 - ACA's Dapr version trails the OSS release by a few weeks; the local
   dev stack must pin a Dapr version compatible with the ACA-managed
   one (currently 1.17.x — see `.mise.toml` and `docker-compose.yaml`).

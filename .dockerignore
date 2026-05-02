@@ -30,6 +30,9 @@ scripts/ci-dapr/
 # E2E and tests aren't needed at runtime
 e2e/
 
+# DAST (ZAP baseline) reports
+zap-output/
+
 # IDE / editor noise
 *.swp
 .DS_Store

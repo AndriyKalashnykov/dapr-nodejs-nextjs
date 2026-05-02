@@ -6,43 +6,86 @@ on:
   workflow_dispatch:
     inputs:
       keep_resources:
-        description: 'Skip terraform destroy (leave ACA running for debug). Default false.'
+        description: "Skip terraform destroy (leave ACA running for debug). Default false."
         required: false
-        default: 'false'
+        default: "false"
         type: choice
-        options: ['false', 'true']
+        options: ["false", "true"]
 
 # OIDC federation: see docs/setup-azure-sandbox.md for how to configure
 # the Azure AD app, federated credentials, and RBAC role assignments
 # ("Contributor" on the subscription + "User Access Administrator" for role
 # assignments inside the TF).
 permissions:
-  id-token: write     # required for OIDC
+  id-token: write # required for OIDC (every job re-uses this)
   contents: read
 
 concurrency:
-  group: e2e-aca       # serialize — single TF state backend, single RG
+  group: e2e-aca # serialize across all 3 jobs — single TF state backend
   cancel-in-progress: false
 
+# Shared env block. Each job inherits the same Azure auth + TF vars; OIDC
+# tokens are minted per-job so all 3 jobs include their own `azure/login`
+# step. TF state is in a remote azurerm backend (see infra/azure/main.tf),
+# so state flows from acr-bootstrap → publish (matrix) → deploy-and-smoke
+# without explicit handoff.
+env:
+  TF_VAR_AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_jwt_secret_key: ${{ secrets.JWT_SECRET_KEY }}
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
 jobs:
-  e2e-aca:
-    name: e2e-aca
+  # ── Phase 1: provision ACR, capture login server FQDN ─────────────────────
+  # Single job that does the targeted `terraform apply -target=container_registry`
+  # and emits the ACR login server FQDN as an output for downstream jobs.
+  acr-bootstrap:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    # Every step in this job needs Azure auth (terraform/az/docker push to
-    # ACR), so the env block lives at job scope. Secrets + vars required
-    # in repo settings:
-    #   secrets.AZURE_CLIENT_ID        — AAD App (client) ID of the federated identity
-    #   secrets.AZURE_TENANT_ID        — AAD tenant ID
-    #   secrets.AZURE_SUBSCRIPTION_ID  — Target Azure subscription
-    #   secrets.JWT_SECRET_KEY         — seeded into Key Vault; must match smoke JWT
+    timeout-minutes: 15
+    outputs:
+      acr_server: ${{ steps.acr.outputs.server }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          install: true
+          cache: true
+
+      - name: Provision ACR
+        run: make tf-apply-acr
+
+      - name: Read ACR login server
+        id: acr
+        run: echo "server=$(make tf-acr-login-server)" >> "$GITHUB_OUTPUT"
+
+  # ── Phase 2: per-service build/scan/smoke/push/sign in parallel ───────────
+  # Matrix-fans out the duplicated per-service step blocks. Each matrix entry:
+  #   1. Builds single-arch image, scans with Trivy, smoke-tests it
+  #   2. Builds multi-arch (amd64+arm64) and pushes to ACR
+  #   3. Cosign-signs the published manifest digest (keyless OIDC)
+  # Both services build in parallel — wall-clock = max(per-service), not sum.
+  publish:
+    needs: [acr-bootstrap]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [backend-ts, web-nextjs]
     env:
-      TF_VAR_AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      TF_VAR_jwt_secret_key: ${{ secrets.JWT_SECRET_KEY }}
-      ARM_USE_OIDC: 'true'
-      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ACR_SERVER: ${{ needs.acr-bootstrap.outputs.acr_server }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -66,74 +109,108 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4
 
-      - name: Provision ACR
-        run: make tf-apply-acr
-
-      - name: Read ACR login server
-        id: acr
-        run: echo "server=$(make tf-acr-login-server)" >> "$GITHUB_OUTPUT"
-
       - name: Log in to ACR
+        env:
+          ACR_NAME: ${{ env.ACR_SERVER }}
         run: az acr login --name "${ACR_NAME%%.*}"
-        env:
-          ACR_NAME: ${{ steps.acr.outputs.server }}
 
-      # Build-scan-push for each image. The local-load scan stage runs on
-      # `linux/amd64` only (buildx can `--load` a single arch into the
-      # local daemon). After the scan passes the multi-arch (amd64 + arm64)
-      # build re-runs with `--push` to ACR.
-      - name: Build backend-ts (scan stage)
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.ACR_SERVER }}/${{ matrix.service }}
+          tags: |
+            type=sha,prefix=,format=long
+          flavor: |
+            latest=false
+
+      # Pattern A gate 1 — single-arch load for scanning + smoke testing.
+      - name: Build image for scan
         run: make image-build-prod
         env:
-          SERVICE: backend-ts
+          SERVICE: ${{ matrix.service }}
           IMAGE_TAG: ${{ github.sha }}
 
-      - name: Trivy image scan backend-ts
+      # Pattern A gate 2 — Trivy image scan.
+      - name: Trivy image scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: backend-ts:${{ github.sha }}
-          scanners: 'vuln,secret,misconfig'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
+          image-ref: ${{ matrix.service }}:${{ github.sha }}
+          scanners: "vuln,secret,misconfig"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
           ignore-unfixed: true
           trivyignores: ./.trivyignore.yaml
 
-      - name: Build and push backend-ts (multi-arch)
-        run: make image-push-multi-arch
+      # Pattern A gate 3 — boot the image and grep logs for the startup marker.
+      - name: Smoke test
+        run: make image-smoke-test
         env:
-          SERVICE: backend-ts
-          IMAGE_TAG: ${{ github.sha }}
-          REGISTRY: ${{ steps.acr.outputs.server }}
-
-      - name: Build web-nextjs (scan stage)
-        run: make image-build-prod
-        env:
-          SERVICE: web-nextjs
+          SERVICE: ${{ matrix.service }}
           IMAGE_TAG: ${{ github.sha }}
 
-      - name: Trivy image scan web-nextjs
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      # Pattern A gate 4 — multi-arch build + push. ~95% cache-hit from the
+      # scan build via type=gha. provenance/sbom both false to keep the OCI
+      # image index free of `unknown/unknown` attestation entries.
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v7.0.0
         with:
-          image-ref: web-nextjs:${{ github.sha }}
-          scanners: 'vuln,secret,misconfig'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'
-          ignore-unfixed: true
-          trivyignores: ./.trivyignore.yaml
+          context: .
+          file: app/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Build and push web-nextjs (multi-arch)
-        run: make image-push-multi-arch
+      # Pattern A gate 5 — Cosign keyless OIDC signing by digest.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6e07505a5d62a0b35eaa2dabd16a3146b4c52 # v3.7.0
+
+      - name: Sign image with cosign (keyless OIDC)
         env:
-          SERVICE: web-nextjs
-          IMAGE_TAG: ${{ github.sha }}
-          REGISTRY: ${{ steps.acr.outputs.server }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "→ cosign sign ${tag}@${DIGEST}"
+            cosign sign --yes "${tag}@${DIGEST}"
+          done <<< "${TAGS}"
+
+  # ── Phase 3: full TF apply (ACA env + apps), smoke, destroy ───────────────
+  deploy-and-smoke:
+    needs: [publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          install: true
+          cache: true
 
       - name: Terraform apply
         run: make tf-apply
         env:
           GIT_SHA: ${{ github.sha }}
 
-      - name: Run ACA smoke test
+      - name: Smoke test
         env:
           TF_DIR: infra/azure
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}

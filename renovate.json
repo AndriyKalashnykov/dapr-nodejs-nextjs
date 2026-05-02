@@ -1,15 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices",
-    ":semanticCommitType(chore)"
-  ],
+  "extends": ["config:best-practices", ":semanticCommitType(chore)"],
   "commitMessagePrefix": "chore(all): ",
   "commitMessageAction": "update",
   "commitBody": "Signed-off-by: Renovate Bot <bot@renovateapp.com>",
-  "labels": [
-    "dependencies"
-  ],
+  "labels": ["dependencies"],
   "prConcurrentLimit": 50,
   "prHourlyLimit": 0,
   "platformAutomerge": true,
@@ -27,9 +22,7 @@
     "custom.regex"
   ],
   "vulnerabilityAlerts": {
-    "labels": [
-      "security"
-    ],
+    "labels": ["security"],
     "automerge": true,
     "minimumReleaseAge": "0 days"
   },
@@ -43,35 +36,24 @@
   "packageRules": [
     {
       "description": "Wait 3 days before automerging major updates",
-      "matchUpdateTypes": [
-        "major"
-      ],
+      "matchUpdateTypes": ["major"],
       "minimumReleaseAge": "3 days"
     },
     {
       "description": "Group GitHub Actions into one PR",
-      "matchManagers": [
-        "github-actions"
-      ],
+      "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions"
     },
     {
       "description": "Group devDependencies non-major updates",
-      "matchDepTypes": [
-        "devDependencies"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
       "groupName": "dev-dependencies",
       "automerge": true
     },
     {
       "description": "Group type definitions",
-      "matchPackageNames": [
-        "/^@types\\//"
-      ],
+      "matchPackageNames": ["/^@types\\//"],
       "groupName": "type-definitions",
       "automerge": true
     },
@@ -110,66 +92,40 @@
     },
     {
       "description": "Group OpenTelemetry packages",
-      "matchPackageNames": [
-        "/^@opentelemetry\\//"
-      ],
+      "matchPackageNames": ["/^@opentelemetry\\//"],
       "groupName": "OpenTelemetry"
     },
     {
       "description": "Group Knex and database packages",
-      "matchPackageNames": [
-        "knex",
-        "pg",
-        "@types/pg"
-      ],
+      "matchPackageNames": ["knex", "pg", "@types/pg"],
       "groupName": "Database"
     },
     {
       "description": "Group Vite packages",
-      "matchPackageNames": [
-        "vite",
-        "/^@vitejs\\//"
-      ],
+      "matchPackageNames": ["vite", "/^@vitejs\\//"],
       "groupName": "Vite"
     },
     {
       "description": "Group Docker base images",
-      "matchManagers": [
-        "dockerfile",
-        "docker-compose"
-      ],
+      "matchManagers": ["dockerfile", "docker-compose"],
       "groupName": "Docker base images"
     },
     {
       "description": "Group Node.js version updates (mise + dockerfile + docker-compose)",
-      "matchPackageNames": [
-        "node"
-      ],
-      "matchManagers": [
-        "dockerfile",
-        "docker-compose",
-        "mise"
-      ],
+      "matchPackageNames": ["node"],
+      "matchManagers": ["dockerfile", "docker-compose", "mise"],
       "groupName": "Node.js"
     },
     {
       "description": "Group Makefile inline `# renovate:` tool versions",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchFileNames": [
-        "Makefile"
-      ],
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["Makefile"],
       "groupName": "Makefile tools"
     },
     {
       "description": "Group .mise.toml inline `# renovate:` tool versions",
-      "matchManagers": [
-        "custom.regex"
-      ],
-      "matchFileNames": [
-        ".mise.toml"
-      ],
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": [".mise.toml"],
       "groupName": "mise tools"
     }
   ],
@@ -177,24 +133,31 @@
     {
       "customType": "regex",
       "description": "Generic Makefile tool version manager — matches any `# renovate: ...` comment above a `NAME_VERSION := value` assignment",
-      "managerFilePatterns": [
-        "/^Makefile$/"
-      ],
+      "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
-        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n[A-Z_]+_VERSION\\s*:=\\s*(?<currentValue>\\S+)"
+        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n[A-Z_]+\\s*:=\\s*(?<currentValue>\\S+)"
       ],
       "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver-coerced{{/if}}"
     },
     {
       "customType": "regex",
       "description": "Generic .mise.toml tool version manager — matches `# renovate: ...` comment above an `\"aqua:owner/repo\" = \"X.Y.Z\"` entry",
-      "managerFilePatterns": [
-        "/^\\.mise\\.toml$/"
-      ],
+      "managerFilePatterns": ["/^\\.mise\\.toml$/"],
       "matchStrings": [
         "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n\\s*\"[^\"]+\"\\s*=\\s*\"(?<currentValue>[^\"]+)\""
       ],
       "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver-coerced{{/if}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Track `corepack prepare pnpm@X.Y.Z` literals in Dockerfiles — keeps them in lockstep with package.json packageManager (npm manager tracks that field separately)",
+      "managerFilePatterns": ["/(^|/)Dockerfile(\\..+)?$/"],
+      "matchStrings": [
+        "corepack\\s+prepare\\s+pnpm@(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "pnpm",
+      "versioningTemplate": "semver"
     }
   ]
 }

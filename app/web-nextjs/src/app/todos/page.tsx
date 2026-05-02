@@ -1,11 +1,15 @@
-import TodoList from '@/components/todo/todo-list';
-import { getAll } from '@/services/todo';
-import { HydrationBoundary, QueryClient, dehydrate } from '@tanstack/react-query';
+import TodoList from "@/components/todo/todo-list";
+import { getAll } from "@/services/todo";
+import {
+  HydrationBoundary,
+  QueryClient,
+  dehydrate,
+} from "@tanstack/react-query";
 
 export default async function Page() {
   const queryClient = new QueryClient();
   await queryClient.prefetchQuery({
-    queryKey: ['todos'],
+    queryKey: ["todos"],
     queryFn: getAll,
   });
 

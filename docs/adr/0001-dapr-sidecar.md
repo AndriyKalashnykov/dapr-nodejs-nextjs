@@ -1,7 +1,7 @@
 # ADR 0001: Dapr sidecar for inter-service communication
 
 | Status   | Date       |
-|----------|------------|
+| -------- | ---------- |
 | Accepted | 2026-04-29 |
 
 ## Context
@@ -32,6 +32,7 @@ container plus a `daprd` container scaled 1:1.
 ## Consequences
 
 **Pros**
+
 - Application code calls a single localhost endpoint
   (`http://localhost:3500/v1.0/...`) regardless of where the
   state store / broker actually lives.
@@ -44,6 +45,7 @@ container plus a `daprd` container scaled 1:1.
   built-in OpenTelemetry exporter.
 
 **Cons**
+
 - Each service now has two containers — small per-pod memory and
   CPU overhead (sidecar is ~20–40 MB resident).
 - Failures span more components: the sidecar can be the cause of an

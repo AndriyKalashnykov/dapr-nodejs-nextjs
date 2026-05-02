@@ -39,3 +39,6 @@ terraform.tfstate.backup
 *.tfvars
 
 *.tsbuildinfo
+
+# DAST (ZAP baseline) reports
+zap-output/

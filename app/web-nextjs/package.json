@@ -6,9 +6,10 @@
     "dev": "WATCHPACK_POLLING=true next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "test": "vitest --config vitest.config.ts",
-    "test:cov": "vitest --config vitest.config.ts run --coverage"
+    "test:cov": "vitest --config vitest.config.ts run --coverage",
+    "test:integration": "vitest --config vitest.integration.config.ts run"
   },
   "dependencies": {
     "@dapr/dapr": "^3.6.0",

@@ -1,7 +1,4 @@
 {
   "files": [],
-  "references": [
-    { "path": "packages/@sos/sdk" },
-    { "path": "app/backend-ts" }
-  ]
+  "references": [{ "path": "packages/@sos/sdk" }, { "path": "app/backend-ts" }]
 }

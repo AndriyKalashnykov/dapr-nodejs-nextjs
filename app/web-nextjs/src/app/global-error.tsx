@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 // Next.js App Router global error boundary. Without a user-defined
 // `global-error.tsx`, Next.js synthesizes an internal `/_global-error` route

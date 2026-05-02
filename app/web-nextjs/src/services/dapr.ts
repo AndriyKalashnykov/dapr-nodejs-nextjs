@@ -1,4 +1,7 @@
-import { dapr } from '@/config';
-import { DaprClient } from '@dapr/dapr';
+import { dapr } from "@/config";
+import { DaprClient } from "@dapr/dapr";
 
-export const daprClient = new DaprClient({ daprHost: dapr.host, daprPort: dapr.port });
+export const daprClient = new DaprClient({
+  daprHost: dapr.host,
+  daprPort: dapr.port,
+});

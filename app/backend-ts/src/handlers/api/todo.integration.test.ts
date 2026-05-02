@@ -166,6 +166,31 @@ describe('Integration: Todo API', () => {
     });
   });
 
+  // PATCH is registered alongside PUT for updateTodoById (`methods: ['put','patch']`).
+  // A regression that drops PATCH from the method array would otherwise be silent
+  // because the unit suite only mocks the route, not the registered methods.
+  describe('PATCH /api/v1/todos/{id}', () => {
+    it('returns a valid payload (alias of PUT)', async () => {
+      const res = await request(app)
+        .patch(`/api/v1/todos/${todo.id}`)
+        .send({ title: 'Patched todo' })
+        .set('Authorization', token);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        apiVersion: '1.0',
+        id: expect.any(String),
+        data: {
+          id: todo.id,
+          title: 'Patched todo',
+          completed: false,
+          createdAt: expect.any(String),
+          updatedAt: expect.any(String),
+          kind: 'todo',
+        },
+      });
+    });
+  });
+
   describe('DELETE /api/v1/todos/{id}', () => {
     it('returns a valid payload', async () => {
       const res = await request(app).delete(`/api/v1/todos/${todo.id}`).set('Authorization', token);
