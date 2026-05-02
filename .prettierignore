@@ -1,0 +1,34 @@
+# Generated / vendored output
+**/node_modules/
+**/build/
+**/dist/
+**/.next/
+**/coverage/
+**/*.tsbuildinfo
+
+# Lockfiles + manifests Prettier shouldn't reformat
+pnpm-lock.yaml
+**/openapi.yaml
+
+# Scaffold templates — handlebars-style placeholders + intentional unformatted
+# state. Generated services run prettier in their own workspace post-scaffold.
+scaffolds/
+
+# Terraform-managed (use `terraform fmt`, not Prettier)
+infra/azure/
+
+# Dapr / docker-compose YAML are hand-edited; Prettier's YAML rewriting
+# changes quoting and breaks Dapr component metadata round-tripping
+shared/dapr/components/
+shared/dapr/docker-compose.yaml
+shared/db/docker-compose.yaml
+docker-compose.yaml
+
+# CI Dapr fixtures
+scripts/ci-dapr/
+
+# Mermaid CLI puppeteer config (JSON-with-comments quirks)
+.mermaid-puppeteer.json
+
+# DAST output
+zap-output/

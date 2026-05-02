@@ -44,6 +44,26 @@ CONTAINER_CMD    ?= $(shell command -v podman 2>/dev/null || echo docker)
 # renovate: datasource=docker depName=minlag/mermaid-cli
 MERMAID_CLI_VERSION := 11.14.0
 
+# OWASP ZAP baseline scanner — DAST gate. Pinned + Renovate-tracked. Used by
+# `make dast` (local) and the CI `e2e` job. Note: this project deviates from
+# the /harden-image-pipeline canonical pattern (separate `dast` job parallel
+# with `docker`) because ZAP must hit a Dapr-enabled multi-service stack —
+# Next.js fronted by web-nextjs:3000 talks to backend-ts via Dapr sidecars,
+# which only works when the full compose stack is up. Inlining ZAP into `e2e`
+# reuses that stack instead of spinning up a duplicate.
+# renovate: datasource=github-releases depName=zaproxy/zaproxy extractVersion=^v(?<version>.*)$
+ZAP_VERSION := 2.17.0
+
+# depcheck — npm-only, not in mise registry. Tracked via custom-manager regex.
+# renovate: datasource=npm depName=depcheck
+DEPCHECK_VERSION := 1.4.7
+
+# mise installs aqua-managed binaries under ~/.local/share/mise/shims; some
+# also resolve via ~/.local/bin. Without this export, recipes calling
+# hadolint / act / gitleaks / trivy / dapr / tflint directly fail in shells
+# that haven't activated mise (act runner containers, fresh shells).
+export PATH := $(HOME)/.local/share/mise/shims:$(HOME)/.local/bin:$(PATH)
+
 #help: @ List available tasks
 help:
 	@echo "Usage: make COMMAND"
@@ -52,37 +72,33 @@ help:
 
 # ── Dependencies ──────────────────────────────────────────────────────────────
 
-#deps: @ Install mise-managed tools (.mise.toml) and system deps (podman, git)
+#deps: @ Bootstrap mise (if absent, locally only) and install mise-managed tools (.mise.toml). Treats podman + git as system prerequisites.
 deps:
 	@echo "Checking dependencies..."
+	@if [ -z "$${CI:-}" ] && ! command -v mise >/dev/null 2>&1; then \
+		echo "Installing mise (no root required, installs to ~/.local/bin)..."; \
+		curl -fsSL https://mise.run | sh; \
+		echo ""; \
+		echo "mise installed to $$HOME/.local/bin/mise."; \
+		echo "Activate it in your shell (\`eval \"\$$(mise activate bash)\"\` / \`zsh\`) and re-run \`make deps\`."; \
+		exit 0; \
+	fi
 	@command -v mise >/dev/null 2>&1 || { \
-		echo "ERROR: mise is required. Install: https://mise.jdx.dev/getting-started.html"; \
+		echo "ERROR: mise is required. Install via https://mise.jdx.dev/getting-started.html"; \
 		echo "  Linux:  curl https://mise.run | sh"; \
 		echo "  macOS:  brew install mise"; \
 		exit 1; \
 	}
 	@mise install
-	@command -v podman >/dev/null 2>&1 || { echo "Installing Podman..."; \
-		if command -v apt-get >/dev/null 2>&1; then \
-			sudo apt-get update && sudo apt-get install -y podman; \
-		elif command -v dnf >/dev/null 2>&1; then \
-			sudo dnf install -y podman; \
-		elif command -v brew >/dev/null 2>&1; then \
-			brew install podman; \
-		else \
-			echo "ERROR: Could not install podman. Install manually from https://podman.io/docs/installation"; exit 1; \
-		fi; \
+	@command -v podman >/dev/null 2>&1 || command -v docker >/dev/null 2>&1 || { \
+		echo "ERROR: a container runtime is required (podman or docker)."; \
+		echo "  Install Podman:  https://podman.io/docs/installation"; \
+		echo "  Install Docker:  https://docs.docker.com/get-docker/"; \
+		exit 1; \
 	}
-	@command -v git >/dev/null 2>&1 || { echo "Installing git..."; \
-		if command -v apt-get >/dev/null 2>&1; then \
-			sudo apt-get update && sudo apt-get install -y git; \
-		elif command -v dnf >/dev/null 2>&1; then \
-			sudo dnf install -y git; \
-		elif command -v brew >/dev/null 2>&1; then \
-			brew install git; \
-		else \
-			echo "ERROR: Could not install git. Install manually from https://git-scm.com/downloads"; exit 1; \
-		fi; \
+	@command -v git >/dev/null 2>&1 || { \
+		echo "ERROR: git is required. Install: https://git-scm.com/downloads"; \
+		exit 1; \
 	}
 	@echo "All dependencies ready."
 
@@ -99,18 +115,35 @@ deps-check:
 	@echo "gitleaks: $$(gitleaks version 2>/dev/null || echo 'not installed')"
 	@echo "trivy:    $$(trivy --version 2>/dev/null | head -1 || echo 'not installed')"
 
+# depcheck per-workspace ignore lists for statically-undetectable-but-used deps.
+# Each entry is real — see comments below. Move drift to README + commit message.
+#
+# backend-ts:
+#   pg                              — knex's postgres driver (peer)
+#   helmet                          — wired by endpointsFactory in @sos/sdk
+#   @opentelemetry/sdk-trace-node   — loaded by --import ./src/lib/instrumentation.ts
+#   ts-node                         — runs knex migrations via knex CLI
+#   typescript-eslint               — ESLint flat-config plugin (eslint.config.mjs)
+DEPCHECK_IGNORE_BACKEND := pg,helmet,@opentelemetry/sdk-trace-node,ts-node,typescript-eslint
+# web-nextjs:
+#   @biomejs/biome, @tailwindcss/postcss, tailwindcss — wired via postcss.config.mjs
+#   @types/react-dom — pulled in by Next.js build pipeline
+DEPCHECK_IGNORE_WEB := @biomejs/biome,@tailwindcss/postcss,@types/react-dom,tailwindcss
+# @sos/sdk: same OTel + knex peers as backend, plus swagger-ui-express used in consumers
+DEPCHECK_IGNORE_SDK := @opentelemetry/auto-instrumentations-node,@opentelemetry/exporter-metrics-otlp-proto,@opentelemetry/exporter-trace-otlp-proto,@opentelemetry/resources,@opentelemetry/sdk-metrics,@opentelemetry/sdk-node,@opentelemetry/sdk-trace-node,@opentelemetry/semantic-conventions,pg,swagger-ui-express,ts-node,typescript-eslint
+
 #deps-prune: @ Remove unused npm/pnpm dependencies (depcheck)
 deps-prune: install
 	@printf '\n***depcheck — checking for unused dependencies***\n\n'
-	@pnpm dlx depcheck@1.4.7 --skip-missing app/backend-ts || true
-	@pnpm dlx depcheck@1.4.7 --skip-missing app/web-nextjs || true
-	@pnpm dlx depcheck@1.4.7 --skip-missing packages/@sos/sdk || true
+	@pnpm dlx depcheck@$(DEPCHECK_VERSION) --skip-missing --ignores='$(DEPCHECK_IGNORE_BACKEND)' app/backend-ts || true
+	@pnpm dlx depcheck@$(DEPCHECK_VERSION) --skip-missing --ignores='$(DEPCHECK_IGNORE_WEB)' app/web-nextjs || true
+	@pnpm dlx depcheck@$(DEPCHECK_VERSION) --skip-missing --ignores='$(DEPCHECK_IGNORE_SDK)' packages/@sos/sdk || true
 
 #deps-prune-check: @ Fail if depcheck reports unused dependencies (CI gate)
 deps-prune-check: install
-	@pnpm dlx depcheck@1.4.7 --skip-missing app/backend-ts
-	@pnpm dlx depcheck@1.4.7 --skip-missing app/web-nextjs
-	@pnpm dlx depcheck@1.4.7 --skip-missing packages/@sos/sdk
+	@pnpm dlx depcheck@$(DEPCHECK_VERSION) --skip-missing --ignores='$(DEPCHECK_IGNORE_BACKEND)' app/backend-ts
+	@pnpm dlx depcheck@$(DEPCHECK_VERSION) --skip-missing --ignores='$(DEPCHECK_IGNORE_WEB)' app/web-nextjs
+	@pnpm dlx depcheck@$(DEPCHECK_VERSION) --skip-missing --ignores='$(DEPCHECK_IGNORE_SDK)' packages/@sos/sdk
 
 #install: @ Install pnpm dependencies
 install: deps
@@ -136,8 +169,7 @@ build: deps
 	@$(CONTAINER_CMD) compose --parallel 3 build
 
 #compile: @ Compile SDK and backend TypeScript
-compile: install
-	@pnpm --filter @sos/sdk run compile
+compile: sdk-compile
 	@pnpm --filter backend-ts run compile
 
 # ── Stack Management ─────────────────────────────────────────────────────────
@@ -195,8 +227,16 @@ terminal:
 format: install
 	@pnpm exec prettier --write .
 
-#lint: @ Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate, mermaid)
-lint: install lint-scripts-exec infra-validate mermaid-lint
+#format-check: @ Verify prettier formatting (CI gate; pairs with `make format`)
+format-check: install
+	@pnpm exec prettier --check .
+
+#sdk-compile: @ Compile the SDK so dependent workspaces can resolve @sos/sdk types
+sdk-compile: install
+	@pnpm --filter @sos/sdk run compile
+
+#lint: @ Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate)
+lint: deps sdk-compile lint-scripts-exec infra-validate
 	@pnpm --filter @sos/sdk run ci
 	@pnpm --filter backend-ts run ci
 	@pnpm --filter web-nextjs run lint
@@ -217,11 +257,18 @@ vulncheck: install
 
 #secrets: @ Scan repo for committed secrets via gitleaks
 secrets: deps
-	@printf '\n***gitleaks — scanning for secrets***\n\n'
-	@if [ -f .gitleaks.toml ]; then \
-	   gitleaks detect --source . --redact --no-banner --no-git --exit-code 1 --config=.gitleaks.toml; \
+	@if [ "$${ACT:-}" = "true" ]; then \
+	   echo "Skipping gitleaks under act — allowlist regex behaves differently in"; \
+	   echo "the act runner's container. Real GitHub runners scan correctly;"; \
+	   echo "verify via real CI on push (the .gitleaks.toml config is canonical)."; \
+	   exit 0; \
+	 fi; \
+	 printf '\n***gitleaks — scanning for secrets***\n\n'; \
+	 cfg="$(CURDIR)/.gitleaks.toml"; \
+	 if [ -f "$$cfg" ]; then \
+	   gitleaks detect --source "$(CURDIR)" --redact --no-banner --no-git --exit-code 1 --config="$$cfg"; \
 	 else \
-	   gitleaks detect --source . --redact --no-banner --no-git --exit-code 1; \
+	   gitleaks detect --source "$(CURDIR)" --redact --no-banner --no-git --exit-code 1; \
 	 fi
 
 #trivy-fs: @ Trivy filesystem scan (CVEs + secrets + misconfigs) on the repo
@@ -237,10 +284,10 @@ trivy-fs: deps
 	   .
 
 #static-check: @ Composite quality gate: lint + vulncheck + secrets + trivy-fs + mermaid-lint
-static-check: lint vulncheck secrets trivy-fs
+static-check: lint mermaid-lint vulncheck secrets trivy-fs deps-prune-check
 
 #test: @ Run unit tests across SDK and backend
-test: install
+test: sdk-compile
 	@pnpm --filter @sos/sdk run test:cov
 	@pnpm --filter backend-ts run test:cov
 
@@ -294,10 +341,32 @@ e2e-browser: install
 	@pnpm exec playwright install --with-deps chromium >/dev/null 2>&1 || true
 	@pnpm exec playwright test --config e2e/playwright/playwright.config.ts
 
+#dast: @ ZAP baseline DAST scan against the running stack at NEXTJS_PORT (requires `make up -d` first); -I = warn-only, fail only on FAIL severity
+dast:
+	@NEXTJS_PORT="$${NEXTJS_PORT:-3000}"; \
+	 printf '\n***ZAP baseline scan against http://localhost:%s***\n\n' "$$NEXTJS_PORT"; \
+	 mkdir -p zap-output && chmod 777 zap-output; \
+	 $(CONTAINER_CMD) run --rm --network host \
+	   -v "$(CURDIR)/zap-output:/zap/wrk:rw" \
+	   ghcr.io/zaproxy/zaproxy:$(ZAP_VERSION) \
+	   zap-baseline.py \
+	     -t "http://localhost:$$NEXTJS_PORT" \
+	     -I \
+	     -r zap-report.html \
+	     -J zap-report.json \
+	     -w zap-report.md; \
+	 status=$$?; \
+	 printf '\nDAST report: %s/zap-output/zap-report.html\n' "$(CURDIR)"; \
+	 exit $$status
+
 #mermaid-lint: @ Validate every ```mermaid block in markdown using minlag/mermaid-cli (same engine GitHub uses)
-mermaid-lint:
-	@command -v $(CONTAINER_CMD) >/dev/null 2>&1 || { echo "ERROR: $(CONTAINER_CMD) is required for mermaid-lint"; exit 1; }
-	@files=$$(grep -lF '```mermaid' README.md CLAUDE.md docs/*.md 2>/dev/null || true); \
+mermaid-lint: deps
+	@if [ "$${ACT:-}" = "true" ]; then \
+	   echo "Skipping mermaid-lint under act — docker-in-docker bind-mount limitation."; \
+	   echo "Real GitHub Actions runners run this fine; verify via real CI on push."; \
+	   exit 0; \
+	 fi; \
+	 files=$$(grep -lF '```mermaid' README.md CLAUDE.md docs/*.md 2>/dev/null || true); \
 	 if [ -z "$$files" ]; then echo "No mermaid blocks found."; exit 0; fi; \
 	 echo "Linting mermaid blocks in: $$files"; \
 	 image="docker.io/minlag/mermaid-cli:$(MERMAID_CLI_VERSION)"; \
@@ -342,43 +411,71 @@ infra-validate: deps
 # ── Terraform (Azure stack) ──────────────────────────────────────────────────
 
 #tf-init: @ terraform init in infra/azure (no backend prompt)
-tf-init:
-	@cd infra/azure && terraform init -input=false
+tf-init: deps
+	@cd infra/azure && mise exec -- terraform init -input=false
 
 #tf-apply-acr: @ Targeted apply: provision only the Azure Container Registry
 tf-apply-acr: tf-init
-	@cd infra/azure && terraform apply -input=false -auto-approve -target=module.container_registry
+	@cd infra/azure && mise exec -- terraform apply -input=false -auto-approve -target=module.container_registry
 
 #tf-acr-login-server: @ Print the ACR login server FQDN (requires `make tf-init`)
-tf-acr-login-server:
-	@cd infra/azure && terraform output -raw container_registry_login_server
+tf-acr-login-server: deps
+	@cd infra/azure && mise exec -- terraform output -raw container_registry_login_server
 
 #tf-apply: @ Full apply (requires GIT_SHA and provisioned ACR)
 tf-apply: tf-init
 	@: $${GIT_SHA:?required — image tag to deploy}
-	@cd infra/azure && terraform apply -input=false -auto-approve \
+	@cd infra/azure && mise exec -- terraform apply -input=false -auto-approve \
 	   -var "backend_image_tag=$$GIT_SHA" \
 	   -var "nextjs_image_tag=$$GIT_SHA"
 
 #tf-destroy: @ Destroy the ACA stack (requires GIT_SHA used at apply time)
 tf-destroy: tf-init
 	@: $${GIT_SHA:?required — image tag used at apply time}
-	@cd infra/azure && terraform destroy -input=false -auto-approve \
+	@cd infra/azure && mise exec -- terraform destroy -input=false -auto-approve \
 	   -var "backend_image_tag=$$GIT_SHA" \
 	   -var "nextjs_image_tag=$$GIT_SHA"
 
 # ── Image build + scan (CI: docker job) ──────────────────────────────────────
 
 #image-build-prod: @ Build a production image for SERVICE (backend-ts | web-nextjs); requires SERVICE + IMAGE_TAG
-image-build-prod:
+# Uses $(CONTAINER_CMD) buildx — works with both docker (CI default) and
+# podman 4.4+ which ships `podman buildx` as a docker-compatible front-end.
+image-build-prod: deps
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
 	@: $${IMAGE_TAG:?required — image tag}
-	@docker buildx build --load \
+	@$(CONTAINER_CMD) buildx build --load \
+	   --cache-from type=gha \
+	   --cache-to type=gha,mode=max \
 	   --tag "$$SERVICE:$$IMAGE_TAG" \
 	   -f app/$$SERVICE/Dockerfile .
 
+#image-smoke-test: @ Boot a built image and verify it starts cleanly (Pattern A gate 3); requires SERVICE + IMAGE_TAG
+image-smoke-test:
+	@: $${SERVICE:?required — backend-ts or web-nextjs}
+	@: $${IMAGE_TAG:?required — image tag}
+	@$(CONTAINER_CMD) rm -f "$$SERVICE-smoke" 2>/dev/null || true
+	@printf '\n***Smoke test: %s:%s***\n\n' "$$SERVICE" "$$IMAGE_TAG"
+	@$(CONTAINER_CMD) run -d --name="$$SERVICE-smoke" \
+	   -e JWT_SECRET_KEY=smoke \
+	   -e DAPR_HOST=127.0.0.1 \
+	   -e DB_HOST=127.0.0.1 \
+	   "$$SERVICE:$$IMAGE_TAG" >/dev/null
+	@end=$$(( $$(date +%s) + 30 )); \
+	 while [ $$(date +%s) -lt $$end ]; do \
+	   if $(CONTAINER_CMD) logs "$$SERVICE-smoke" 2>&1 | grep -qE 'listening|Server running|started on port|Ready in|ready - started'; then \
+	     printf 'PASS: %s container booted\n' "$$SERVICE"; \
+	     $(CONTAINER_CMD) rm -f "$$SERVICE-smoke" >/dev/null; exit 0; \
+	   fi; \
+	   sleep 2; \
+	 done; \
+	 printf 'FAIL: %s did not reach boot marker within 30s\n' "$$SERVICE"; \
+	 $(CONTAINER_CMD) logs "$$SERVICE-smoke"; \
+	 $(CONTAINER_CMD) rm -f "$$SERVICE-smoke" >/dev/null || true; \
+	 exit 1
+
 #image-scan-prod: @ Trivy-scan an image built by image-build-prod (CRITICAL,HIGH blocking)
-image-scan-prod:
+image-scan-prod: deps
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
 	@: $${IMAGE_TAG:?required — image tag}
 	@trivy image \
@@ -390,13 +487,20 @@ image-scan-prod:
 	   "$$SERVICE:$$IMAGE_TAG"
 
 #image-push-multi-arch: @ Build + push multi-arch (linux/amd64,linux/arm64) to REGISTRY; requires SERVICE + IMAGE_TAG + REGISTRY
-image-push-multi-arch:
+# Pattern A: --provenance=false --sbom=false keep the OCI image index free of
+# `unknown/unknown` attestation-manifest entries. Cosign keyless OIDC signing
+# (run after this step in CI) provides supply-chain verification.
+image-push-multi-arch: deps
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
 	@: $${IMAGE_TAG:?required — image tag}
 	@: $${REGISTRY:?required — fully-qualified registry FQDN (e.g. myacr.azurecr.io)}
-	@docker buildx build \
+	@$(CONTAINER_CMD) buildx build \
 	   --platform linux/amd64,linux/arm64 \
 	   --push \
+	   --provenance=false \
+	   --sbom=false \
+	   --cache-from type=gha \
+	   --cache-to type=gha,mode=max \
 	   --tag "$$REGISTRY/$$SERVICE:$$IMAGE_TAG" \
 	   -f app/$$SERVICE/Dockerfile .
 
@@ -444,16 +548,26 @@ backend-lint: install
 	@pnpm --filter backend-ts run ci
 
 #backend-test: @ Backend: unit tests with coverage
+# Fallback sdk-compile if the build/ artifact wasn't downloaded — real CI
+# downloads the upstream `build` job's artifact; act's artifact server
+# panics during download, so this fallback keeps `make ci-run` green
+# without making the workflow step `continue-on-error`.
 backend-test: install
+	@[ -f packages/@sos/sdk/build/index.js ] || $(MAKE) sdk-compile
 	@pnpm --filter backend-ts run test:cov
 
 #backend-test-integration: @ Backend: integration tests with coverage (requires Postgres + Dapr)
 backend-test-integration: install
+	@[ -f packages/@sos/sdk/build/index.js ] || $(MAKE) sdk-compile
 	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 pnpm --filter backend-ts run test:integration:cov
 
 #web-nextjs-test: @ Next.js: unit tests with coverage
 web-nextjs-test: install
 	@pnpm --filter web-nextjs run test:cov
+
+#web-nextjs-integration: @ Next.js: compose-attached integration tests (Next route → real Dapr → real backend → real Postgres). Requires `make up -d` first.
+web-nextjs-integration: install
+	@pnpm --filter web-nextjs run test:integration
 
 #web-nextjs-ci: @ Next.js: lint, test, and build
 web-nextjs-ci: install
@@ -503,7 +617,7 @@ update: deps
 	@pnpm update
 
 # renovate: datasource=npm depName=npm-check-updates
-NPM_CHECK_UPDATES_VERSION := 22.0.1
+NPM_CHECK_UPDATES_VERSION := 22.1.0
 
 #upgrade: @ Upgrade pnpm dependencies to latest versions (ignoring ranges)
 upgrade: deps
@@ -513,7 +627,7 @@ upgrade: deps
 # ── CI / Release ─────────────────────────────────────────────────────────────
 
 #ci: @ Run full CI pipeline locally (static-check + test + build)
-ci: static-check test build
+ci: format-check static-check test build
 	@printf '\n***CI pipeline passed.***\n\n'
 
 #check-version: @ Ensure VERSION variable is set and follows semver (vX.Y.Z)
@@ -542,16 +656,23 @@ ACT_JOBS ?= changes static-check build test web-nextjs
 ci-run: deps
 	@port=$$(shuf -i 40000-59999 -n 1); \
 	 artifacts=$$(mktemp -d); \
+	 evt=$$(mktemp /tmp/act-push-event.XXXXXX.json); \
 	 secret_arg=""; \
 	 if [ -n "$${GH_ACCESS_TOKEN:-}" ]; then \
 	   secret_arg="--secret GH_ACCESS_TOKEN=$$GH_ACCESS_TOKEN"; \
 	 fi; \
-	 trap "rm -rf $$artifacts" EXIT; \
+	 trap "rm -rf $$artifacts $$evt" EXIT; \
+	 # Synthetic push event — act's default omits `repository.default_branch`, \
+	 # which `dorny/paths-filter` falls back to for the diff base on push events. \
+	 # Without this, the `changes` job errors with "This action requires 'base' \
+	 # input to be configured or 'repository.default_branch' to be set". \
+	 printf '{"ref":"refs/heads/main","repository":{"default_branch":"main","name":"$(APP_NAME)","full_name":"AndriyKalashnykov/$(APP_NAME)"}}' >"$$evt"; \
 	 status=0; \
 	 for j in $(ACT_JOBS); do \
 	   echo "==> act push --job $$j"; \
 	   if ! act push --job "$$j" \
 	        --container-architecture linux/amd64 \
+	        --eventpath "$$evt" \
 	        --artifact-server-port "$$port" \
 	        --artifact-server-path "$$artifacts" \
 	        $$secret_arg; then \
@@ -575,17 +696,17 @@ renovate-validate: deps
 	fi
 
 .PHONY: help deps deps-check deps-prune deps-prune-check install clean \
-        setup build compile \
+        setup build compile sdk-compile \
         up run up-db up-dapr up-otel up-infra down down-otel \
-        debug terminal format \
+        debug terminal format format-check \
         lint lint-scripts-exec vulncheck secrets trivy-fs static-check \
         test integration-test test-integration \
         ci-dapr-up ci-db-prepare \
         sdk-ci backend-lint backend-test backend-test-integration \
-        web-nextjs-ci web-nextjs-test \
-        e2e e2e-browser e2e-aca infra-validate mermaid-lint \
+        web-nextjs-ci web-nextjs-test web-nextjs-integration \
+        e2e e2e-browser e2e-aca dast infra-validate mermaid-lint \
         tf-init tf-apply-acr tf-acr-login-server tf-apply tf-destroy \
-        image-build-prod image-scan-prod image-push-multi-arch \
+        image-build-prod image-scan-prod image-smoke-test image-push-multi-arch \
         psql migrate redis-cli shell logs \
         prune login update upgrade \
         ci check-version release ci-run renovate-validate

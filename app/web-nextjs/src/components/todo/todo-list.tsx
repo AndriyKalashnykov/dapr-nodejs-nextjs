@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import type { Todo } from '@/types';
+import type { Todo } from "@/types";
 // import { useQueryClient } from '@tanstack/react-query';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 
 export default function TodoList() {
   // One option is to build an API route that returns the data for if/when
   // the client side hydration fails or cache is stale.
   const { data } = useQuery({
-    queryKey: ['todos'],
+    queryKey: ["todos"],
     queryFn: async (): Promise<{ data: { items: Todo[] } }> => {
-      console.log('Fetching todos client side..');
-      return fetch('/api/todos').then((res) => res.json());
+      console.log("Fetching todos client side..");
+      return fetch("/api/todos").then((res) => res.json());
     },
   });
 

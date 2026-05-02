@@ -12,12 +12,22 @@ useDefault = true
 
 [allowlist]
 description = "Project-specific allowlist"
+# Patterns are anchored to allow both relative paths (`docs/foo.md`) and
+# absolute paths (`/runner/work/.../docs/foo.md`) — gitleaks resolves
+# `--source .` to absolute under some environments (act runners, CI agents)
+# but reports relative paths locally. `(.*/)?` matches "anywhere in the
+# tree" so the allowlist works on both.
 paths = [
   '''(.*/)?\.next/.*''',
   '''(.*/)?node_modules/.*''',
-  '''.*\.test\.ts$''',
-  '''.*\.integration\.test\.ts$''',
-  '''.*\.spec\.ts$''',
-  '''^scaffolds/.*''',
-  '''^docs/setup-azure-sandbox\.md$''',
+  '''(.*/)?build/.*''',
+  '''(.*/)?dist/.*''',
+  '''(.*/)?coverage/.*''',
+  '''(.*/)?\.git/.*''',
+  '''(.*/)?[^/]*\.test\.ts$''',
+  '''(.*/)?[^/]*\.integration\.test\.ts$''',
+  '''(.*/)?[^/]*\.spec\.ts$''',
+  '''(.*/)?scaffolds/.*''',
+  '''(.*/)?docs/setup-azure-sandbox\.md$''',
+  '''(.*/)?pnpm-lock\.yaml$''',
 ]

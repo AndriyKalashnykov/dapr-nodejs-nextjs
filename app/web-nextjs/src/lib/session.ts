@@ -1,10 +1,10 @@
-import 'server-only';
-import { cookie, env, jwtSecretKey } from '@/config';
-import type { Session } from '@/types';
-import jwt, { type JwtPayload } from 'jsonwebtoken';
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { cache } from 'react';
+import "server-only";
+import { cookie, env, jwtSecretKey } from "@/config";
+import type { Session } from "@/types";
+import jwt, { type JwtPayload } from "jsonwebtoken";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { cache } from "react";
 
 export const sign = (payload: string | Buffer | object) => {
   return jwt.sign(payload, jwtSecretKey, {
@@ -12,14 +12,14 @@ export const sign = (payload: string | Buffer | object) => {
   });
 };
 
-export const verify = (session: string | undefined = '') => {
+export const verify = (session: string | undefined = "") => {
   try {
     const { payload } = jwt.verify(session, jwtSecretKey, {
       complete: true,
     });
     return payload as JwtPayload;
   } catch {
-    console.error('Session verification failed: invalid token');
+    console.error("Session verification failed: invalid token");
   }
 };
 
@@ -29,10 +29,10 @@ export const createSession = async (userId: string) => {
 
   cookieStore.set(cookie.name, jwt, {
     httpOnly: cookie.httpOnly,
-    secure: env === 'development' ? false : cookie.secure,
+    secure: env === "development" ? false : cookie.secure,
     maxAge: cookie.maxAge,
-    sameSite: cookie.sameSite as 'lax' | 'strict' | 'none',
-    path: '/',
+    sameSite: cookie.sameSite as "lax" | "strict" | "none",
+    path: "/",
   });
 };
 
@@ -51,8 +51,8 @@ export const verifySession = cache(async (): Promise<Session> => {
   const session = verify(jwt);
 
   if (!session?.sub || !jwt) {
-    console.error('Invalid session, redirecting to home page');
-    redirect('/');
+    console.error("Invalid session, redirecting to home page");
+    redirect("/");
   }
 
   return { userId: session.sub, token: jwt };

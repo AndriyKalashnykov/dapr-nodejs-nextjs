@@ -166,6 +166,31 @@ describe('Integration: Todo API', () => {
     });
   });
 
+  // PATCH is registered alongside PUT for updateTodoById (`methods: ['put','patch']`).
+  // A regression that drops PATCH from the method array would otherwise be silent
+  // because the unit suite only mocks the route, not the registered methods.
+  describe('PATCH /api/v1/todos/{id}', () => {
+    it('returns a valid payload (alias of PUT)', async () => {
+      const res = await request(app)
+        .patch(`/api/v1/todos/${todo.id}`)
+        .send({ title: 'Patched todo' })
+        .set('Authorization', token);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        apiVersion: '1.0',
+        id: expect.any(String),
+        data: {
+          id: todo.id,
+          title: 'Patched todo',
+          completed: false,
+          createdAt: expect.any(String),
+          updatedAt: expect.any(String),
+          kind: 'todo',
+        },
+      });
+    });
+  });
+
   describe('DELETE /api/v1/todos/{id}', () => {
     it('returns a valid payload', async () => {
       const res = await request(app).delete(`/api/v1/todos/${todo.id}`).set('Authorization', token);
@@ -228,6 +253,70 @@ describe('Integration: Todo API', () => {
         },
       });
       expect(res.status).toBe(404);
+    });
+  });
+
+  // Pagination edge cases — the happy path is covered above; these check
+  // boundary inputs that have historically been silent regression risks.
+  describe('GET /api/v1/todos pagination edges', () => {
+    it('returns 400 on pageSize=0 (validation rejects non-positive)', async () => {
+      const res = await request(app).get('/api/v1/todos?pageSize=0').set('Authorization', token);
+      expect(res.status).toBe(400);
+    });
+    it('returns 400 on negative pageSize', async () => {
+      const res = await request(app).get('/api/v1/todos?pageSize=-1').set('Authorization', token);
+      expect(res.status).toBe(400);
+    });
+    it('returns empty items array when pageIndex past end', async () => {
+      const res = await request(app)
+        .get('/api/v1/todos?pageSize=10&pageIndex=99')
+        .set('Authorization', token);
+      expect(res.status).toBe(200);
+      expect(res.body.data.items).toEqual([]);
+      expect(res.body.data.currentItemCount).toBe(0);
+    });
+  });
+
+  // Soft-delete leaves the row in Postgres with `deleted_at IS NOT NULL`.
+  // The 404-on-second-GET test above proves the SQL filter works; this
+  // queries the row directly to confirm it's still present (audit trail).
+  describe('soft-delete row remains in Postgres', () => {
+    it('row exists with deleted_at set after DELETE', async () => {
+      await request(app).delete(`/api/v1/todos/${todo.id}`).set('Authorization', token);
+      const row = await context
+        .db('todos')
+        .where({ id: todo.id })
+        .first<{ id: string; deleted_at: Date | null }>();
+      expect(row).toBeTruthy();
+      expect(row?.id).toBe(todo.id);
+      expect(row?.deleted_at).toBeTruthy();
+    });
+  });
+
+  // Concurrency: integration suite is `maxConcurrency: 1`, so this just
+  // exercises two POSTs in flight from one fork to confirm IDs are distinct
+  // and both rows land. Catches regressions in the transaction boundary or
+  // primary-key generation.
+  describe('concurrent create', () => {
+    it('two POSTs in parallel produce distinct ids and both rows persist', async () => {
+      const [a, b] = await Promise.all([
+        request(app)
+          .post('/api/v1/todos')
+          .send({ title: 'concurrent-A' })
+          .set('Authorization', token),
+        request(app)
+          .post('/api/v1/todos')
+          .send({ title: 'concurrent-B' })
+          .set('Authorization', token),
+      ]);
+      expect(a.status).toBe(200);
+      expect(b.status).toBe(200);
+      expect(a.body.data.id).not.toBe(b.body.data.id);
+      const rows = await context
+        .db('todos')
+        .whereIn('title', ['concurrent-A', 'concurrent-B'])
+        .select<Array<{ id: string; title: string }>>('id', 'title');
+      expect(rows).toHaveLength(2);
     });
   });
 });
