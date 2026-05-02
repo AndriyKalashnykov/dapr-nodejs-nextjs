@@ -2,6 +2,7 @@ import { db as dbConfig } from '@/config';
 import { getServer } from '@/lib/test/vitest.integration.setup';
 import type { ContextKind } from '@/types';
 import type { Context } from '@sos/sdk';
+import * as path from 'path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Migrations rollback → latest cycle. Catches:
@@ -13,10 +14,23 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 //
 // Runs against the real Postgres test schema (backend_ts_test) provisioned by
 // `make ci-db-prepare`. Does NOT touch any Dapr surface — pure DB plumbing.
+//
+// Knex's in-process `migrate.*` API uses the directory passed in the migrate
+// config (or `./migrations` relative to cwd as the default). The SDK's
+// `buildKnexConfig` doesn't set `directory:` because the project's `pnpm run
+// knex` CLI invocation resolves migrations via the knexfile's location. To
+// drive migrations programmatically here we have to point at the real
+// migrations dir explicitly.
 describe('Integration: Knex migrations', () => {
   let context: Context<ContextKind>;
 
   const knownTables = ['todos'];
+  const migrationsConfig = {
+    directory: path.resolve(__dirname, 'migrations'),
+    extension: 'ts',
+    schemaName: dbConfig.schema,
+    tableName: 'knex_migrations',
+  };
 
   const tablesInSchema = async (): Promise<string[]> => {
     const { rows } = await context.db.raw<{ rows: Array<{ tablename: string }> }>(
@@ -33,7 +47,7 @@ describe('Integration: Knex migrations', () => {
 
   afterAll(async () => {
     // Leave the schema at "latest" for any subsequent test files in the suite.
-    await context.db.migrate.latest();
+    await context.db.migrate.latest(migrationsConfig);
   });
 
   it('rollback --all then latest reproduces the schema', async () => {
@@ -44,7 +58,7 @@ describe('Integration: Knex migrations', () => {
     }
 
     // Roll back all migrations. Every `down` must succeed.
-    await expect(context.db.migrate.rollback(undefined, true)).resolves.not.toThrow();
+    await expect(context.db.migrate.rollback(migrationsConfig, true)).resolves.not.toThrow();
 
     const afterRollback = await tablesInSchema();
     for (const t of knownTables) {
@@ -52,7 +66,7 @@ describe('Integration: Knex migrations', () => {
     }
 
     // Re-apply. The schema must come back identical.
-    await expect(context.db.migrate.latest()).resolves.not.toThrow();
+    await expect(context.db.migrate.latest(migrationsConfig)).resolves.not.toThrow();
 
     const afterLatest = await tablesInSchema();
     for (const t of knownTables) {
@@ -61,7 +75,7 @@ describe('Integration: Knex migrations', () => {
   });
 
   it('migrate.list reports zero pending migrations after latest', async () => {
-    const [, pending] = await context.db.migrate.list();
+    const [, pending] = await context.db.migrate.list(migrationsConfig);
     expect(pending).toEqual([]);
   });
 });
