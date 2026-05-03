@@ -148,9 +148,9 @@ variable "postgres_server_name" {
 }
 
 variable "postgres_version" {
-  description = "PostgreSQL major version. Azure Flexible Server supports up to 17; local dev runs 18."
+  description = "PostgreSQL major version. Azure Flexible Server supports PG 18 GA since 2025-12-01; matches local dev."
   type        = string
-  default     = "17"
+  default     = "18"
 }
 
 variable "postgres_sku_name" {
