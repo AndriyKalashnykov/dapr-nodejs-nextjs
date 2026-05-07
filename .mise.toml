@@ -20,7 +20,7 @@ node = "24"
 
 # pnpm — mandatory package manager for this repo (per /makefile skill).
 # renovate: datasource=github-releases depName=pnpm/pnpm
-"aqua:pnpm/pnpm" = "11.0.6"
+"aqua:pnpm/pnpm" = "11.0.7"
 
 # Dapr CLI — pinned to keep compose sidecar / CLI lockstep with Azure infra
 # and with CI steps that `dapr run`.
