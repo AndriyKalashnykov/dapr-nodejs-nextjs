@@ -11,13 +11,16 @@ RUN pnpm install --frozen-lockfile --filter <%= name %>...
 WORKDIR /workspace/app/<%= name %>
 RUN pnpm run build
 
-# Runtime
+# Runtime — invoke vite preview's binary directly. No pnpm/corepack at
+# runtime (the previous `CMD ["pnpm","run","preview"]` form tripped the
+# corepack per-user activation trap — see PR #198). `vite preview` is the
+# scaffold default for a quick local prod-mode boot; replace with a
+# proper static server (nginx, caddy, serve) for production deployments.
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
-RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 ENV NODE_ENV=production
 WORKDIR /app
 # hadolint ignore=DL3021
 COPY --from=build --chown=node:node /workspace/app/<%= name %> /app
 USER node
 EXPOSE 3001
-CMD [ "pnpm", "run", "preview" ]
+CMD ["./node_modules/.bin/vite", "preview", "--host", "0.0.0.0", "--port", "3001"]

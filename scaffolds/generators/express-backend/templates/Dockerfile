@@ -13,12 +13,15 @@ RUN pnpm --filter @sos/sdk run compile && \
     pnpm --filter <%= name %> run compile && \
     pnpm deploy --legacy --filter <%= name %> --prod /deploy
 
-# Runtime
+# Runtime — no pnpm/corepack at runtime. Invoke tsx directly via the
+# deploy artifact's .bin/tsx shim. Mirrors app/backend-ts/Dockerfile; the
+# previous `CMD ["pnpm","run","start"]` form tripped corepack's per-user
+# activation trap (see PR #198) when the runtime USER (`node`) had no
+# activated pin and fell back to the base image's default pnpm.
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
-RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /deploy ./
 USER node
 EXPOSE 3001
-CMD [ "pnpm", "run", "start" ]
+CMD ["./node_modules/.bin/tsx", "--import", "./src/lib/instrumentation.ts", "src/main.ts"]

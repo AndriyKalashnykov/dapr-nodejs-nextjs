@@ -1,0 +1,59 @@
+name: Main rot detection
+
+# Detects rot on `main` that only surfaces when CI runs (vulncheck advisories
+# landing for unchanged lockfiles, latent runtime regressions in unchanged
+# Dockerfiles, etc.). Without this, the project's CI workflow (`ci.yml`)
+# fires only on `pull_request` / push-to-main / tag pushes — main itself
+# can rot for weeks while every queued PR fails on the inherited problem
+# and nobody notices because the root cause looks like a per-PR issue.
+#
+# Root cause history: between 2026-05-02 (last green main) and 2026-05-13,
+# upstream advisories for `next` and `protobufjs` plus a latent corepack
+# trap in the backend-ts Dockerfile blocked 16 consecutive Renovate PRs.
+# This workflow makes that decay visible within ~24h.
+
+on:
+  schedule:
+    # 07:00 UTC daily — early enough that morning standups see the result.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  CONTAINER_CMD: docker
+
+jobs:
+  static-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: main
+
+      - name: Set up toolchain (mise)
+        uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+        with:
+          install: true
+          cache: true
+
+      - name: Resolve pnpm store path
+        run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Static check (lint + vulncheck + secrets + trivy-fs)
+        run: make static-check

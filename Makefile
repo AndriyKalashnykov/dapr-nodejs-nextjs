@@ -232,7 +232,7 @@ sdk-compile: install
 	@pnpm --filter @sos/sdk run compile
 
 #lint: @ Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate)
-lint: deps sdk-compile lint-scripts-exec infra-validate
+lint: deps sdk-compile lint-scripts-exec lint-docker-no-runtime-pnpm infra-validate
 	@pnpm --filter @sos/sdk run ci
 	@pnpm --filter backend-ts run ci
 	@pnpm --filter web-nextjs run lint
@@ -244,6 +244,29 @@ lint-scripts-exec:
 	 if [ -n "$$nonexec" ]; then \
 	   printf 'ERROR: shell scripts missing +x bit:\n%s\n' "$$nonexec"; \
 	   echo "Fix: chmod +x <file> && git add --chmod=+x <file>"; \
+	   exit 1; \
+	 fi
+
+#lint-docker-no-runtime-pnpm: @ Fail if a production Dockerfile's runtime CMD invokes pnpm (corepack per-user activation trap)
+# When a production runtime CMD shells out to pnpm, the container's first
+# invocation goes through corepack as the runtime USER (typically `node`).
+# `corepack prepare` in the build stage runs as `root` and is per-user, so
+# the runtime user has no activated pin — corepack falls back to the base
+# image's default pnpm (currently 11.x), downloads it, and pnpm 11's
+# depsStatusCheck writes to the workdir (root-owned) → EACCES → exit 243 →
+# smoke-test failure. Root cause documented in PR #198.
+#
+# Excludes `Dockerfile.dev` (dev images run as root, no `USER` directive,
+# so the trap doesn't apply; they legitimately need `pnpm run dev` for
+# hot-reload). Fix: mirror app/web-nextjs/Dockerfile pattern — invoke the
+# entrypoint via node or ./node_modules/.bin/<binary> directly.
+lint-docker-no-runtime-pnpm:
+	@hits=$$(find . \( -name 'Dockerfile' -o -name 'Dockerfile.prod' \) \
+	           -not -path '*/node_modules/*' -not -path '*/.next/*' -print0 | \
+	         xargs -0 -r grep -HnE '^CMD\b.*\bpnpm\b' 2>/dev/null || true); \
+	 if [ -n "$$hits" ]; then \
+	   printf 'ERROR: production Dockerfile runtime CMD invokes pnpm — corepack per-user activation trap (see PR #198):\n%s\n' "$$hits"; \
+	   echo  'Fix: invoke the entrypoint directly via node or ./node_modules/.bin/<binary>; no pnpm at runtime.'; \
 	   exit 1; \
 	 fi
 
@@ -712,7 +735,7 @@ renovate-validate: deps
         setup build compile sdk-compile \
         up run up-db up-dapr up-otel up-infra down down-otel \
         debug terminal format format-check \
-        lint lint-scripts-exec vulncheck secrets trivy-fs static-check \
+        lint lint-scripts-exec lint-docker-no-runtime-pnpm vulncheck secrets trivy-fs static-check \
         test integration-test test-integration \
         ci-dapr-up ci-db-prepare \
         sdk-ci backend-lint backend-test backend-test-integration \
