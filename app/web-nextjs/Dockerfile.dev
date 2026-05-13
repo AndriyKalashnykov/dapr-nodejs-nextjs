@@ -2,16 +2,26 @@
 # Build
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS build
 ENV NODE_ENV=development
-RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
+RUN corepack enable && corepack prepare pnpm@11.0.9 --activate
 WORKDIR /app
 COPY package.json .npmrc next.config.ts postcss.config.mjs tsconfig.json eslint.config.mjs ./
-RUN pnpm install
+# pnpm v11 reads the `allowBuilds` map ONLY from `pnpm-workspace.yaml`
+# (the legacy `pnpm.onlyBuiltDependencies` array in package.json and the
+# `.npmrc shamefully-hoist` key are silently ignored). This dev image
+# builds standalone (compose context = `app/web-nextjs/`) so the root
+# repo's workspace yaml isn't reachable — emit a minimal local copy with
+# the same `allowBuilds` list as the root yaml so `pnpm install` doesn't
+# trip `[ERR_PNPM_IGNORED_BUILDS]` on sharp / protobufjs postinstalls.
+# `packages: []` keeps this from being interpreted as a real workspace
+# (no `app/*` to find in this single-package context).
+RUN printf 'packages: []\nallowBuilds:\n  "@scarf/scarf": true\n  esbuild: true\n  protobufjs: true\n  sharp: true\n' > pnpm-workspace.yaml && \
+    pnpm install
 WORKDIR /app/public
 COPY public ./
 
 # Run
 FROM docker.io/node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS runtime
-RUN corepack enable && corepack prepare pnpm@10.33.4 --activate
+RUN corepack enable && corepack prepare pnpm@11.0.9 --activate
 WORKDIR /app
 COPY --from=build /app /app
 COPY /src /app/src
