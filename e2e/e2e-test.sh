@@ -18,6 +18,14 @@ SCHEDULER_PORT="${SCHEDULER_PORT:-50006}"
 BACKEND_APP_ID="${BACKEND_APP_ID:-backend-ts}"
 JWT_SECRET="${JWT_SECRET_KEY:-secret}"
 
+# Container runtime — mirror the Makefile's resolution (podman locally,
+# docker in CI). The pub/sub probes below need to grep container logs, so
+# they MUST use the same runtime that `make up -d` started. Hardcoding
+# `docker compose logs` here passes in CI (CONTAINER_CMD=docker forced via
+# ci.yml env) but silently returns 0 lines locally when podman holds the
+# containers, falsely failing the [8/8] consumer/DROP probes.
+CONTAINER_CMD="${CONTAINER_CMD:-$(command -v podman 2>/dev/null || echo docker)}"
+
 PASS=0
 FAIL=0
 WARN=0
@@ -276,7 +284,7 @@ if echo "$PROBE_TODO" | grep -q '"id"'; then
   # than local Podman — 10s was too tight.
   WITNESS=0
   for _ in $(seq 1 30); do
-    if docker compose logs --tail=200 backend-ts 2>/dev/null \
+    if $CONTAINER_CMD compose logs --tail=200 backend-ts 2>/dev/null \
         | grep -q 'Consumer handling message'; then
       WITNESS=1; break
     fi
@@ -316,7 +324,7 @@ if [[ "$DROP_STATUS" == "204" ]]; then
   # local Podman.
   DROP_WITNESS=0
   for _ in $(seq 1 10); do
-    if docker compose logs --tail=200 backend-ts-dapr 2>/dev/null \
+    if $CONTAINER_CMD compose logs --tail=200 backend-ts-dapr 2>/dev/null \
         | grep -q "DROP status returned from app while processing pub/sub event ${PROBE_ID}"; then
       DROP_WITNESS=1; break
     fi
