@@ -112,12 +112,20 @@
       "groupName": "Makefile tools"
     },
     {
+      "description": "Disable digest pinning for Makefile-tracked docker tools (mermaid-cli, etc.). The `docker:pinDigests` preset (inherited from `config:best-practices`) otherwise generates a `pinDigest` update for `MERMAID_CLI_VERSION := 11.14.0`-style entries that have no digest yet. When a `non-major` version bump (11.14.0 → 11.15.0) is ALSO available, both updates target the same `renovate/makefile-tools` branch and collide; Renovate suppresses the version bump and the constant drifts silently. Makefile-tracked deps are dev/lint tools (mermaid-cli, depcheck, npm-check-updates, ZAP, renovate), not production runtime — version pinning is sufficient. Source: 2026-05-13 review — mermaid-cli stuck at 11.14.0 while 11.15.0 was available; debug log showed both `pinDigest` and `non-major` updates in `renovate/makefile-tools` with `Ignoring upgrade collision` suppressing the bump.",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["Makefile"],
+      "matchDatasources": ["docker"],
+      "pinDigests": false
+    },
+    {
       "description": "Group .mise.toml entries (extracted natively by the `mise` manager) into one PR",
       "matchManagers": ["mise"],
       "groupName": "mise tools"
     },
     {
-      "description": "Group every Docker-datasource dep (dockerfile FROM, compose image:, Makefile `# renovate: datasource=docker …` constants) into one PR so Makefile `*_VERSION` constants don't drift behind their compose/Dockerfile siblings. Placed LAST so it wins over the Makefile-tools / mise-tools rules above for Docker-datasource deps.",
+      "description": "Group Docker base images managed by the built-in dockerfile + docker-compose managers. Restricted to those two managers (NOT also custom.regex) because a custom.regex docker-datasource dep that's ONLY in Makefile (e.g. `minlag/mermaid-cli`) has no compose/Dockerfile sibling to edit; including it here makes Renovate's collision-dedup suppress the bump entirely. Such Makefile-only docker deps fall back to the `Makefile tools` group above and bump normally. Placed LAST so it wins over the Makefile-tools / mise-tools rules above for the deps it does match. Source: 2026-05-13 review — `mermaid-cli` stuck at 11.14.0 while 11.15.0 was available because the previous unscoped `matchDatasources: [docker]` form trapped it.",
+      "matchManagers": ["dockerfile", "docker-compose"],
       "matchDatasources": ["docker"],
       "groupName": "Docker base images"
     },
