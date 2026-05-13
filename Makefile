@@ -19,20 +19,16 @@ COMPOSE_PROJECT  := demo-ts
 NETWORK          := $(COMPOSE_PROJECT)_dapr-net
 
 # Diagnostic / one-shot images consumed by `make psql`, `make redis-cli`,
-# and `make shell`. Each tag is Renovate-tracked via the inline comment
-# below — the `_VERSION` constant carries the value, the `_IMAGE`
-# composite stays as a derived var so recipes read cleanly.
-# renovate: datasource=docker depName=alpine
-ALPINE_VERSION   := 3.21
-ALPINE_IMAGE     := alpine:$(ALPINE_VERSION)
-
-# renovate: datasource=docker depName=postgres
-POSTGRES_VERSION := 18-alpine
-POSTGRES_IMAGE   := postgres:$(POSTGRES_VERSION)
-
-# renovate: datasource=docker depName=redis
-REDIS_VERSION    := 8-alpine
-REDIS_IMAGE      := redis:$(REDIS_VERSION)
+# and `make terminal-network`. Derived at runtime from the compose files
+# (single source of truth — Renovate's dockerfile/docker-compose managers
+# keep those tags in lockstep). Previously these were duplicated as
+# `*_VERSION` constants with their own `# renovate:` annotations, but
+# Renovate's collision dedup suppressed the Makefile bumps and the
+# constants silently drifted (alpine in compose advanced 3.21 → 3.23 while
+# the Makefile constant stayed at 3.21).
+ALPINE_IMAGE     := $(shell awk '/^[[:space:]]+image:[[:space:]]+"?(docker\.io\/)?alpine:/ {gsub(/"/,""); print $$2; exit}' docker-compose.yaml)
+POSTGRES_IMAGE   := $(shell awk '/^[[:space:]]+image:[[:space:]]+"?(docker\.io\/)?postgres:/ {gsub(/"/,""); print $$2; exit}' shared/db/docker-compose.yaml)
+REDIS_IMAGE      := $(shell awk '/^[[:space:]]+image:[[:space:]]+"?(docker\.io\/)?redis:/ {gsub(/"/,""); print $$2; exit}' shared/dapr/docker-compose.yaml)
 
 # Container runtime — project standard is podman; fall back to docker for
 # environments without podman (some CI runners). Used by every recipe that
@@ -701,12 +697,15 @@ ci-run: deps
 RENOVATE_VERSION := 43.150.0
 
 #renovate-validate: @ Validate Renovate configuration
+# Uses `npx` (not `pnpm dlx`) because renovate's published `engines.pnpm`
+# constraint lags pnpm major releases — `pnpm dlx renovate` refuses to run
+# on pnpm 11+ until upstream renovate widens the constraint.
 renovate-validate: deps
 	@if [ -n "$${GH_ACCESS_TOKEN:-}" ]; then \
-		GITHUB_COM_TOKEN=$$GH_ACCESS_TOKEN pnpm dlx renovate@$(RENOVATE_VERSION) --platform=local; \
+		GITHUB_COM_TOKEN=$$GH_ACCESS_TOKEN npx --yes renovate@$(RENOVATE_VERSION) --platform=local; \
 	else \
 		echo "Warning: GH_ACCESS_TOKEN not set, some dependency lookups may fail"; \
-		pnpm dlx renovate@$(RENOVATE_VERSION) --platform=local; \
+		npx --yes renovate@$(RENOVATE_VERSION) --platform=local; \
 	fi
 
 .PHONY: help deps deps-check deps-prune deps-prune-check install clean \

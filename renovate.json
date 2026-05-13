@@ -106,8 +106,19 @@
       "groupName": "Vite"
     },
     {
-      "description": "Group Docker base images",
-      "matchManagers": ["dockerfile", "docker-compose"],
+      "description": "Group Makefile inline `# renovate:` tool versions",
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["Makefile"],
+      "groupName": "Makefile tools"
+    },
+    {
+      "description": "Group .mise.toml entries (extracted natively by the `mise` manager) into one PR",
+      "matchManagers": ["mise"],
+      "groupName": "mise tools"
+    },
+    {
+      "description": "Group every Docker-datasource dep (dockerfile FROM, compose image:, Makefile `# renovate: datasource=docker …` constants) into one PR so Makefile `*_VERSION` constants don't drift behind their compose/Dockerfile siblings. Placed LAST so it wins over the Makefile-tools / mise-tools rules above for Docker-datasource deps.",
+      "matchDatasources": ["docker"],
       "groupName": "Docker base images"
     },
     {
@@ -115,18 +126,6 @@
       "matchPackageNames": ["node"],
       "matchManagers": ["dockerfile", "docker-compose", "mise"],
       "groupName": "Node.js"
-    },
-    {
-      "description": "Group Makefile inline `# renovate:` tool versions",
-      "matchManagers": ["custom.regex"],
-      "matchFileNames": ["Makefile"],
-      "groupName": "Makefile tools"
-    },
-    {
-      "description": "Group .mise.toml inline `# renovate:` tool versions",
-      "matchManagers": ["custom.regex"],
-      "matchFileNames": [".mise.toml"],
-      "groupName": "mise tools"
     }
   ],
   "customManagers": [
@@ -135,16 +134,7 @@
       "description": "Generic Makefile tool version manager — matches any `# renovate: ...` comment above a `NAME_VERSION := value` assignment",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
-        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n[A-Z_]+\\s*:=\\s*(?<currentValue>\\S+)"
-      ],
-      "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver-coerced{{/if}}"
-    },
-    {
-      "customType": "regex",
-      "description": "Generic .mise.toml tool version manager — matches `# renovate: ...` comment above an `\"aqua:owner/repo\" = \"X.Y.Z\"` entry",
-      "managerFilePatterns": ["/^\\.mise\\.toml$/"],
-      "matchStrings": [
-        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n\\s*\"[^\"]+\"\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n[A-Z_]+\\s*[?:]?=\\s*(?<currentValue>\\S+)"
       ],
       "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver-coerced{{/if}}"
     },
