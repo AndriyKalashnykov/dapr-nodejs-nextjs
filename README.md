@@ -3,9 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](https://opensource.org/licenses/MIT)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://app.renovatebot.com/dashboard#github/AndriyKalashnykov/dapr-nodejs-nextjs)
 
-# Dapr Reference Stack — Node.js + Next.js + Azure Container Apps
+# Reference Dapr-on-Node Stack — Node.js + Next.js + Azure Container Apps
 
-Reference implementation of a Dapr-based stack on Node.js and TypeScript. A todo-list REST API backend (Express 5 + Postgres) and a Next.js SSR frontend are wired together through Dapr sidecars for state management (Redis), pub/sub messaging, and service-to-service invocation. Azure Container Apps is the production target (see `infra/azure/`); Docker Compose via Podman is the local dev loop.
+Reference Dapr-on-Node sample wiring a Next.js 16 SSR frontend (App Router, `@vercel/otel`) and an Express 5 / TypeScript backend through Dapr sidecars for state, pub/sub, and service invocation. The **runtime surface** is a JWT-authed REST API plus SSR pages instrumented via OpenTelemetry SDK to Zipkin + a Grafana OTEL collector, with PostgreSQL 18 + Redis 8 as Dapr-managed state/pubsub; the **delivery surface** covers a hardened GitHub Actions pipeline (`pnpm audit`, gitleaks, Trivy fs+image scans, hadolint, mermaid-lint, `lint-docker-no-runtime-pnpm`), Renovate-managed deps with Dependabot Alerts fast-track, a nightly `main-rot.yml` workflow, a three-layer test pyramid (Vitest unit + integration, compose-driven shell e2e, optional Playwright browser e2e), an `mise`-pinned toolchain (pnpm v11 workspaces), and an Azure Container Apps Terraform deploy (`infra/azure/`).
 
 ```mermaid
 C4Context
@@ -39,7 +39,9 @@ The hero diagram is intentionally Context-level (one box): "what is this and who
 | Observability      | OpenTelemetry SDK → Zipkin + Grafana OTEL stack                                |
 | Tests              | Vitest 4 (unit + integration), shell-based compose e2e, Playwright browser e2e |
 | Container runtime  | Podman 4.9+ (Docker-compatible); `docker compose` in CI                        |
-| Monorepo           | pnpm workspaces (`app/*`, `packages/@sos/*`)                                   |
+| Monorepo           | pnpm v11 workspaces (`app/*`, `packages/@sos/*`); config in `pnpm-workspace.yaml` (`allowBuilds`, `overrides`, `publicHoistPattern`) |
+| Toolchain pinning  | [mise](https://mise.jdx.dev/) (`.mise.toml`) — Node, pnpm, dapr CLI, act, hadolint, tflint, gitleaks, Trivy, Terraform |
+| Dependency mgmt    | [Renovate](https://docs.renovatebot.com/) (config in `renovate.json`) with `automerge: true` + GitHub Dependabot Alerts fast-track |
 | Production target  | Azure Container Apps (`infra/azure/`, Terraform)                               |
 
 ## Quick Start
