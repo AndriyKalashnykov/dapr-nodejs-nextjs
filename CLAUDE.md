@@ -38,7 +38,7 @@ make build          # Build all service containers
 make compile        # Compile SDK + backend TypeScript
 
 # Test (no containers needed)
-make lint           # Lint + typecheck (also: hadolint, scripts +x, terraform validate, mermaid)
+make lint           # Lint + typecheck (also: hadolint, scripts +x, terraform validate, mermaid, dockerfile runtime-pnpm guard)
 make vulncheck      # pnpm audit (fails on moderate+)
 make secrets        # gitleaks scan
 make trivy-fs       # Trivy filesystem CVE/secret/misconfig scan
@@ -242,7 +242,7 @@ Always verify locally before committing and pushing. All Makefile targets must p
 
 ```bash
 make compile           # compile SDK + backend TypeScript
-make lint              # lint + typecheck + prettier + hadolint + mermaid + scripts +x guard
+make lint              # lint + typecheck + prettier + hadolint + mermaid + scripts +x guard + dockerfile runtime-pnpm guard
 make static-check      # composite gate (lint [includes mermaid-lint] + vulncheck + secrets + trivy-fs)
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (static-check + test + build)
@@ -278,6 +278,45 @@ gh run watch           # watch the latest CI run
 ### Keep Documentation Up to Date
 
 After any code or configuration change, review and update the project's `*.md` files if affected. This includes `README.md`, `CLAUDE.md`, service READMEs, and docs in `docs/`. Version numbers, command references, architecture descriptions, and environment variable tables must stay in sync with the code.
+
+### Fast-track a transitive CVE without waiting for the parent ecosystem
+
+When `make vulncheck` (`pnpm audit --audit-level=moderate`) flags a CVE in a **transitive** dependency (the vulnerable package is pulled in by some other dep, not declared directly), the fastest fix is a `pnpm.overrides` entry in the root `package.json`. This forces every workspace's lockfile resolution to use the patched version, without waiting for the parent dep to bump its own range.
+
+```jsonc
+// package.json
+{
+  "pnpm": {
+    "overrides": {
+      // semver-range key: any version matching the LHS resolves to the RHS
+      "protobufjs@<8.0.2": ">=8.0.2"
+    }
+  }
+}
+```
+
+Then `pnpm install` regenerates the lockfile with the patched transitive. `pnpm audit` confirms the clearance.
+
+When to use:
+- **Use override** when the CVE is in a transitive (e.g., `protobufjs` reached via `@opentelemetry/exporter-metrics-otlp-proto → @opentelemetry/otlp-transformer`) and the parent hasn't shipped a bump yet, OR the parent's bump would be a major upgrade you're not ready for.
+- **Bump directly** when the CVE is in a workspace's own direct dependency (e.g., `next` in `app/web-nextjs/package.json`). An override hides the bump from Renovate and dependency-dashboard surfacing; bumping directly keeps the version visible.
+
+Drop the override after the next routine Renovate bump pulls in the patched version organically; otherwise it sticks around forever as dead config. Renovate's `replacements:all` preset (already in our `config:best-practices`) helps surface these.
+
+Real example: PR #198 (2026-05-13) added `protobufjs@<8.0.2` to clear three @opentelemetry/* CVEs at once; @opentelemetry's own bumps to 0.217.0 superseded the override on the same PR, so the override served only as a defense-in-depth pin against future regressions.
+
+### Main-branch rot detection
+
+Project CI (`.github/workflows/ci.yml`) runs only on `pull_request` / push-to-main / tag-push events. Without a periodic main-only run, two failure modes accumulate invisibly:
+
+1. **Vuln advisory decay** — `pnpm audit` finds new upstream advisories for packages already in the lockfile.
+2. **Latent regression decay** — a bug already on main only surfaces when a PR triggers a rebuild (e.g., the corepack/pnpm trap in `app/backend-ts/Dockerfile` was already wrong on `main` for ~10 days before any PR's image rebuild revealed it).
+
+`.github/workflows/main-rot.yml` runs `make static-check` against `main` daily (07:00 UTC) plus on-demand via `workflow_dispatch`. A failure surfaces within 24h via GitHub workflow-failure email; no PR required.
+
+To trigger manually: `gh workflow run main-rot.yml`.
+
+Also, **GitHub Dependabot Alerts MUST stay enabled on this repo** (Settings → Security → Dependabot alerts). Renovate's `vulnerabilityAlerts` config block (with `automerge: true`, `minimumReleaseAge: "0 days"`) only fires when GitHub's Dependabot surfaces the CVE — if Alerts is disabled, Renovate has no trigger and CVEs sit unpatched indefinitely. Verify state via `gh api -X GET repos/AndriyKalashnykov/dapr-nodejs-nextjs/vulnerability-alerts` (204 = enabled).
 
 ## Adding a New Service
 
