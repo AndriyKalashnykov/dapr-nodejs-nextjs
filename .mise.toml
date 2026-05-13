@@ -37,7 +37,7 @@ terraform = "1.15.3"
 # Terraform lint — used by infra-validate. Replaces inline `docker run
 # ghcr.io/terraform-linters/tflint:latest` (banned `:latest` + no Renovate
 # tracking).
-"aqua:terraform-linters/tflint" = "0.62.0"
+"aqua:terraform-linters/tflint" = "0.62.1"
 
 # Secret scanner — wired into `make secrets` (part of `make static-check`).
 "aqua:gitleaks/gitleaks" = "8.30.1"
