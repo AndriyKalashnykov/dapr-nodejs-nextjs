@@ -1,3 +1,29 @@
 packages:
   - "app/*"
   - "packages/@sos/*"
+
+# pnpm v11 moved all `pnpm.*` config from package.json into pnpm-workspace.yaml:
+#  - `onlyBuiltDependencies` (v10 array)  → `allowBuilds` (v11 object form)
+#  - `overrides`                          → `overrides` (same name, new home)
+# The legacy `pnpm:` block in package.json is SILENTLY IGNORED by v11.
+# Confirmed 2026-05-13: protobufjs@7.5.8 + 8.0.1 survived `pnpm install` with
+# package.json overrides set, but cleared once moved here.
+#
+# `.npmrc` keys are likewise mostly migrated to camelCase here. v11 doesn't
+# parse `shamefully-hoist=true` from `.npmrc` — the equivalent is
+# `publicHoistPattern: ['*']` below. Without it, transitives like
+# node-mocks-http (a transitive of express-zod-api used directly by
+# backend-ts test utils) wouldn't be hoisted to root `node_modules/` and
+# `tsc` fails with TS2307.
+publicHoistPattern:
+  - '*'
+
+allowBuilds:
+  '@scarf/scarf': true
+  esbuild: true
+  protobufjs: true
+  sharp: true
+
+overrides:
+  'postcss@<8.5.10': '>=8.5.10'
+  'protobufjs@<8.0.2': '>=8.0.2'
