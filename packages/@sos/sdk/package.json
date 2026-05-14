@@ -48,7 +48,7 @@
     "@types/express": "5.0.6",
     "@types/http-errors": "2.0.5",
     "@types/jsonwebtoken": "9.0.10",
-    "@types/node": "24.12.3",
+    "@types/node": "24.12.4",
     "@vitest/coverage-v8": "4.1.6",
     "eslint": "10.3.0",
     "eslint-config-prettier": "10.1.8",
