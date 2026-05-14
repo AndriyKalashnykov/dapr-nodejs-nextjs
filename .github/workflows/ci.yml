@@ -220,11 +220,6 @@ jobs:
           name: sdk-build
           path: packages/@sos/sdk/build
 
-      - name: Set up Dapr CLI
-        uses: dapr/setup-dapr@8d980918fd43a2765c143ce7f687665b2d46a6b9 # v2
-        with:
-          version: "1.17.0"
-
       - name: Bring up Dapr sidecar
         run: make ci-dapr-up
 

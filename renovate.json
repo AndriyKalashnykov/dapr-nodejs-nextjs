@@ -134,6 +134,12 @@
       "matchPackageNames": ["node"],
       "matchManagers": ["dockerfile", "docker-compose", "mise"],
       "groupName": "Node.js"
+    },
+    {
+      "description": "Group pnpm across managers — mise pins `aqua:pnpm/pnpm` (github-tags), the npm manager reads `packageManager` field in `package.json` (npm datasource), and the Dockerfile customManager tracks `corepack prepare pnpm@X.Y.Z` literals (npm datasource). These three were silently drifting (mise advanced to 11.1.1 while Dockerfiles + package.json stayed at 11.0.9) because each manager opens its own PR on its own branch. matchPackageNames covers both depName shapes (`pnpm/pnpm` for the github-tags lookup and `pnpm` for the npm-datasource lookups). Group keeps them in lockstep going forward.",
+      "matchPackageNames": ["pnpm", "pnpm/pnpm"],
+      "matchManagers": ["mise", "npm", "custom.regex"],
+      "groupName": "pnpm"
     }
   ],
   "customManagers": [
