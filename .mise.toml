@@ -32,7 +32,7 @@ node = "24"
 "aqua:hadolint/hadolint" = "2.14.0"
 
 # Terraform — used by infra-validate and e2e-aca targets.
-terraform = "1.15.3"
+terraform = "1.15.4"
 
 # Terraform lint — used by infra-validate. Replaces inline `docker run
 # ghcr.io/terraform-linters/tflint:latest` (banned `:latest` + no Renovate
