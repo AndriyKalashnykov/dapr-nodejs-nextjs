@@ -38,7 +38,7 @@ jobs:
         with:
           ref: main
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
@@ -55,5 +55,5 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Static check (lint + vulncheck + secrets + trivy-fs)
+      - name: Static check
         run: make static-check

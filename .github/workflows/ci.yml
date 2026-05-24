@@ -48,6 +48,11 @@ jobs:
         id: filter
         uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
         with:
+          # `base:` is required when the event has no `repository.default_branch`
+          # (e.g., `act push` for `make ci-run`). On real PR events the input is
+          # ignored — set it empty so the action doesn't emit the "input ignored"
+          # annotation. See /ci-workflow skill §15e.
+          base: ${{ github.event_name == 'push' && 'main' || '' }}
           filters: |
             code:
               - '!(**.md|docs/**|specs/**|LICENSE|.gitignore|.claudeignore|.claude/**|benchmarks/**|**.png|**.jpg|**.gif|**.svg)'
@@ -56,14 +61,14 @@ jobs:
   # ── Build (SDK compile + lint + test → upload artifact) ────────────────────
   build:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
+    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
@@ -97,14 +102,14 @@ jobs:
   # the SDK itself rather than downloading the `build` job's artifact.
   static-check:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
+    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
@@ -127,14 +132,14 @@ jobs:
   # ── Unit tests (backend) ───────────────────────────────────────────────────
   test:
     needs: [changes, build]
-    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
+    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
@@ -171,7 +176,7 @@ jobs:
   # ── Integration tests (backend + Postgres + Dapr sidecar) ──────────────────
   integration-test:
     needs: [changes, build]
-    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
+    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -191,7 +196,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
@@ -243,14 +248,14 @@ jobs:
   # Doesn't depend on @sos/sdk so no artifact download — runs parallel with build.
   web-nextjs:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
+    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
@@ -273,14 +278,14 @@ jobs:
   # ── E2E (full stack via docker compose) ────────────────────────────────────
   e2e:
     needs: [changes, integration-test, web-nextjs]
-    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
+    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true
@@ -328,7 +333,7 @@ jobs:
       # rather than a separate runner image. ZAP version is pinned in the
       # Makefile (ZAP_VERSION constant); `-I` makes the scan warn-only on WARN
       # findings, blocking only on FAIL severity. Report uploaded as artifact.
-      - name: DAST scan (ZAP baseline)
+      - name: DAST scan
         if: ${{ vars.ACT != 'true' }}
         run: make dast
 
@@ -357,7 +362,7 @@ jobs:
   # Images are NOT pushed here; actual registry pushes happen in `e2e-aca.yml`.
   docker:
     needs: [changes, static-check, build, test]
-    if: needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')
+    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -368,7 +373,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Set up toolchain (mise)
+      - name: Set up mise
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
         with:
           install: true

@@ -148,7 +148,7 @@
       "description": "Generic Makefile tool version manager — matches any `# renovate: ...` comment above a `NAME_VERSION := value` assignment",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
-        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?\\s*\\n[A-Z_]+\\s*[?:]?=\\s*(?<currentValue>\\S+)"
+        "# renovate:\\s*datasource=(?<datasource>[a-z-]+?)\\s+depName=(?<depName>[^\\s]+?)(?:\\s+versioning=(?<versioning>[a-z-]+?))?(?:\\s+extractVersion=(?<extractVersion>\\S+?))?\\s*\\n[A-Z_]+\\s*[?:]?=\\s*(?<currentValue>\\S+)"
       ],
       "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver-coerced{{/if}}"
     },

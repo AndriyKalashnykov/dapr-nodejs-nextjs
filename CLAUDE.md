@@ -38,13 +38,15 @@ make build          # Build all service containers
 make compile        # Compile SDK + backend TypeScript
 
 # Test (no containers needed)
-make lint           # Lint + typecheck (also: hadolint, scripts +x, terraform validate, mermaid, dockerfile runtime-pnpm guard)
+make lint           # Lint + typecheck (also: hadolint, scripts +x guard, terraform validate, dockerfile runtime-pnpm guard)
+make mermaid-lint   # Validate every ```mermaid block in markdown via pinned minlag/mermaid-cli
 make vulncheck      # pnpm audit (fails on moderate+)
 make secrets        # gitleaks scan
 make trivy-fs       # Trivy filesystem CVE/secret/misconfig scan
-make static-check   # Composite gate — lint (includes mermaid-lint) + vulncheck + secrets + trivy-fs
+make deps-prune-check # Fail if any workspace has unused dependencies (depcheck)
+make static-check   # Composite gate — lint + mermaid-lint + vulncheck + secrets + trivy-fs + deps-prune-check
 make test           # Unit tests across SDK + backend (with coverage)
-make ci             # Full CI pipeline locally (static-check + test + build)
+make ci             # Full CI pipeline locally (format-check + static-check + test + build)
 
 # Test (containers needed)
 make integration-test # Backend integration tests (requires Postgres + Dapr)
@@ -194,7 +196,7 @@ Each backend feature follows a strict three-layer architecture:
 - **Unit** (`make test`, seconds): `*.test.ts` — Vitest with mocked Dapr and SDK context (see `vitest.setup.ts`). Covers backend-ts, SDK, and web-nextjs (`services/backend-ts.test.ts` covers the Dapr invoker path with mocked `DaprClient`).
 - **Integration** (`make integration-test`, tens of seconds): `*.integration.test.ts` — real Postgres + Dapr sidecar. Tables truncated between tests. `maxConcurrency: 1` to avoid DB race conditions.
 - **E2E** (`make e2e`, minutes): `e2e/e2e-test.sh` — compose-based smoke. Brings up the full stack, exercises backend direct + via Dapr sidecar, verifies 5 service endpoints (Next.js SSR, Swagger, Dapr Dashboard, Zipkin, Grafana), asserts scheduler TCP reachability, covers negative cases (401 no-auth, 404 nonexistent). Optional browser layer: `make e2e-browser` (Playwright against `localhost:3000`).
-- **Markdown / diagrams** (`make mermaid-lint`, seconds): validates every ` ```mermaid ` block in `README.md` / `CLAUDE.md` / `docs/*.md` via pinned `minlag/mermaid-cli` (same engine GitHub renders with). Wired into `make lint` — catches broken Mermaid diagrams before they silently break README rendering on github.com.
+- **Markdown / diagrams** (`make mermaid-lint`, seconds): validates every ` ```mermaid ` block in `README.md` / `CLAUDE.md` / `docs/*.md` via pinned `minlag/mermaid-cli` (same engine GitHub renders with). Wired into `make static-check` as a sibling of `lint` — catches broken Mermaid diagrams before they silently break README rendering on github.com.
 - Framework: Vitest 4 with supertest for HTTP testing
 - Test helpers: `getAuthHeader()` generates JWT tokens, `expectApiDataResponse()`/`expectApiError()` for assertions
 
@@ -204,7 +206,7 @@ Each CI job delegates to a Makefile target. The `changes` detector (using `dorny
 
 1. **changes**: detect whether the PR touches code (vs. docs/images only)
 2. **build** (`make sdk-ci`): compile + lint + unit-test the SDK; upload `sdk-build` artifact
-3. **static-check** (`make static-check`, depends on build): composite gate — `lint` (which includes `mermaid-lint`) + `vulncheck` + `secrets` (gitleaks) + `trivy-fs`
+3. **static-check** (`make static-check`, depends on changes): composite gate — `lint` + `mermaid-lint` + `vulncheck` + `secrets` (gitleaks) + `trivy-fs` + `deps-prune-check`
 4. **test** (`make backend-test`, depends on build): backend unit tests with coverage
 5. **integration-test** (`make backend-test-integration`, depends on build): Postgres service + Dapr sidecar, real DB, real Dapr
 6. **web-nextjs** (`make web-nextjs-ci`, depends on changes): lint + Vitest + Next.js production build
@@ -242,8 +244,8 @@ Always verify locally before committing and pushing. All Makefile targets must p
 
 ```bash
 make compile           # compile SDK + backend TypeScript
-make lint              # lint + typecheck + prettier + hadolint + mermaid + scripts +x guard + dockerfile runtime-pnpm guard
-make static-check      # composite gate (lint [includes mermaid-lint] + vulncheck + secrets + trivy-fs)
+make lint              # lint + typecheck + prettier + hadolint + scripts +x guard + dockerfile runtime-pnpm guard + terraform validate
+make static-check      # composite gate (lint + mermaid-lint + vulncheck + secrets + trivy-fs + deps-prune-check)
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (static-check + test + build)
 make ci-run            # run GitHub Actions workflow locally via act (skips e2e/mermaid-lint/secrets — see notes)
