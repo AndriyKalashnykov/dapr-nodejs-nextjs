@@ -5,7 +5,7 @@
 
 # Reference Dapr-on-Node Stack — Node.js + Next.js + Azure Container Apps
 
-Reference Dapr-on-Node sample wiring a Next.js 16 SSR frontend (App Router, `@vercel/otel`) and an Express 5 / TypeScript backend through Dapr sidecars for state, pub/sub, and service invocation. The **runtime surface** is a JWT-authed REST API plus SSR pages instrumented via OpenTelemetry SDK to Zipkin + a Grafana OTEL collector, with PostgreSQL 18 + Redis 8 as Dapr-managed state/pubsub; the **delivery surface** covers a hardened GitHub Actions pipeline (`pnpm audit`, gitleaks, Trivy fs+image scans, hadolint, mermaid-lint, `lint-docker-no-runtime-pnpm`, OWASP ZAP baseline DAST, cosign keyless OIDC signing on tagged ACA pushes), Renovate-managed deps with Dependabot Alerts fast-track, a nightly `main-rot.yml` workflow, a three-layer test pyramid (Vitest unit + integration, compose-driven shell e2e, optional Playwright browser e2e), an `mise`-pinned toolchain (pnpm v11 workspaces), and an Azure Container Apps Terraform deploy (`infra/azure/`).
+Reference Dapr-on-Node sample wiring a Next.js 16 SSR frontend (App Router, `@vercel/otel`) and an Express 5 / TypeScript backend through Dapr sidecars for state, pub/sub, and service invocation. The **runtime surface** is a JWT-authed REST API plus SSR pages instrumented via OpenTelemetry SDK to Zipkin + a Grafana OTEL collector, with PostgreSQL 18 as primary datastore (Knex) and Redis 8 as the Dapr-managed state/pubsub backend; the **delivery surface** covers a hardened GitHub Actions pipeline (`pnpm audit`, gitleaks, Trivy fs+image scans, hadolint, mermaid-lint, `lint-docker-no-runtime-pnpm`, OWASP ZAP baseline DAST in the `e2e` job) plus cosign keyless OIDC signing in the manual `e2e-aca.yml` deploy workflow, Renovate-managed deps with Dependabot Alerts fast-track, a nightly `main-rot.yml` workflow, a three-layer test pyramid (Vitest unit + integration, compose-driven shell e2e, optional Playwright browser e2e), an `mise`-pinned toolchain (pnpm v11 workspaces), and an Azure Container Apps Terraform deploy (`infra/azure/`).
 
 ```mermaid
 C4Context
@@ -177,10 +177,10 @@ sequenceDiagram
     Bd->>B: forward + W3C traceparent
     B->>P: INSERT todo (knex transaction)
     P-->>B: row
-    B->>Bd: PubSub.publish('todo-data', cloudevent)
-    Bd->>R: XADD todo-data
     B->>Bd: State.destroy('state.todos:{id}')
     Bd->>R: DEL state.todos:{id}
+    B->>Bd: PubSub.publish('todo-data', cloudevent)
+    Bd->>R: XADD todo-data
     B-->>Bd: 200 { apiVersion, data: { id, title, completed:false, createdAt } }
     Bd-->>Nd: 200
     Nd-->>N: 200
@@ -225,7 +225,7 @@ make up             # Bring up the full stack (Ctrl-C to stop)
 #   unit (seconds, no containers)
 make test              # Vitest unit tests — SDK + backend + web-nextjs
 make lint              # Lint + typecheck across all workspaces
-make static-check      # Composite quality gate (lint [includes mermaid-lint] + vulncheck + secrets + trivy-fs + deps-prune-check)
+make static-check      # Composite quality gate (lint + mermaid-lint + vulncheck + secrets + trivy-fs + deps-prune-check)
 make ci                # Full local CI (format-check + static-check + test + build)
 
 #   integration (tens of seconds, needs Postgres + Dapr sidecar)
@@ -284,7 +284,7 @@ C4Deployment
                 ContainerDb(redis_aca, "Azure Cache for Redis", "Standard tier, TLS 1.2", "State + pub/sub")
             }
             Deployment_Node(pg_subnet, "Postgres delegated subnet") {
-                ContainerDb(pg_aca, "Postgres Flexible Server", "PostgreSQL 17, private DNS", "Primary datastore")
+                ContainerDb(pg_aca, "Postgres Flexible Server", "PostgreSQL 18, private DNS", "Primary datastore")
             }
         }
         Container(kv, "Key Vault", "azurerm_key_vault", "jwt-secret-key, postgres-password, redis-password, app-insights-connection-string")
@@ -350,16 +350,19 @@ Run `make help` to see all targets.
 
 ### Code Quality
 
-| Target                   | Description                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `make format`            | Auto-format code with Prettier across all workspaces                                                         |
-| `make lint`              | Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate, mermaid) |
-| `make lint-scripts-exec` | Fail if any tracked shell script under `scripts/` is missing the executable bit                              |
-| `make vulncheck`         | Run pnpm audit for known vulnerabilities (fails on moderate+)                                                |
-| `make secrets`           | Scan repo for committed secrets via `gitleaks`                                                               |
-| `make trivy-fs`          | Trivy filesystem scan — CVEs + secrets + Dockerfile misconfigs (CRITICAL,HIGH)                               |
-| `make mermaid-lint`      | Validate every ` ```mermaid ` block in markdown via pinned `minlag/mermaid-cli`                              |
-| `make static-check`      | Composite quality gate: `lint` (which includes `mermaid-lint`) + `vulncheck` + `secrets` + `trivy-fs`        |
+| Target                              | Description                                                                                                              |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `make format`                       | Auto-format code with Prettier across all workspaces                                                                     |
+| `make format-check`                 | Verify Prettier formatting (CI gate; pairs with `make format`)                                                           |
+| `make lint`                         | Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate)                      |
+| `make lint-scripts-exec`            | Fail if any tracked shell script under `scripts/` is missing the executable bit                                          |
+| `make lint-docker-no-runtime-pnpm`  | Fail if a production Dockerfile's runtime CMD invokes pnpm (corepack per-user activation trap)                           |
+| `make vulncheck`                    | Run pnpm audit for known vulnerabilities (fails on moderate+)                                                            |
+| `make secrets`                      | Scan repo for committed secrets via `gitleaks`                                                                           |
+| `make trivy-fs`                     | Trivy filesystem scan — CVEs + secrets + Dockerfile misconfigs (CRITICAL,HIGH)                                           |
+| `make mermaid-lint`                 | Validate every ` ```mermaid ` block in markdown via pinned `minlag/mermaid-cli`                                          |
+| `make static-check`                 | Composite quality gate: `lint` + `mermaid-lint` + `vulncheck` + `secrets` + `trivy-fs` + `deps-prune-check`              |
+| `make deps-prune-check`             | Fail if any workspace has unused dependencies (CI gate via `depcheck`)                                                   |
 
 ### Testing (three-layer pyramid)
 
@@ -407,6 +410,7 @@ Run `make help` to see all targets.
 | `make tf-apply`                                               | Full Terraform apply (requires `GIT_SHA` and provisioned ACR) |
 | `make tf-destroy`                                             | Destroy the ACA stack (requires `GIT_SHA` used at apply time) |
 | `SERVICE=… IMAGE_TAG=… make image-build-prod`                 | Build a production image (single-arch, `--load` for scan)     |
+| `SERVICE=… IMAGE_TAG=… make image-smoke-test`                 | Boot a built image and verify it starts cleanly (Pattern A gate 3) |
 | `SERVICE=… IMAGE_TAG=… make image-scan-prod`                  | Trivy scan a previously built production image                |
 | `SERVICE=… IMAGE_TAG=… REGISTRY=… make image-push-multi-arch` | Build multi-arch (amd64+arm64) and push to ACR                |
 
@@ -431,14 +435,12 @@ Run `make help` to see all targets.
 
 | Target                        | Description                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------------ |
-| `make ci`                     | Run full CI pipeline locally (`static-check` + `test` + `build`)               |
+| `make ci`                     | Run full CI pipeline locally (`format-check` + `static-check` + `test` + `build`) |
 | `make ci-run`                 | Run GitHub Actions workflow locally using [act](https://github.com/nektos/act) |
 | `make check-version`          | Ensure VERSION variable is set and follows semver (vX.Y.Z)                     |
 | `make release VERSION=v1.0.0` | Create and push a release tag                                                  |
 | `make renovate-validate`      | Validate Renovate configuration                                                |
-| `make e2e`                    | Compose-based e2e smoke (local)                                                |
-| `make e2e-browser`            | Playwright browser e2e (local)                                                 |
-| `make e2e-aca`                | Deploy to ACA, smoke, destroy (**incurs Azure cost**)                          |
+| `make dast`                   | ZAP baseline DAST scan against the running stack (requires `make up -d` first) |
 
 ## Database migrations
 
@@ -457,16 +459,17 @@ Migrations also run automatically on backend startup via `pnpm run dev`.
 
 GitHub Actions runs on every push to `main`, tags `v*`, and pull requests.
 
-| Job                  | Triggers                            | Steps                                                                                                                     |
-| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **changes**          | push, PR, tags                      | Detect code changes (skips heavy jobs on docs-only PRs via [`dorny/paths-filter`](https://github.com/dorny/paths-filter)) |
-| **build**            | after changes                       | Compile SDK, lint & test SDK, upload `sdk-build` artifact                                                                 |
-| **static-check**     | after build                         | Composite gate: `make static-check` (lint [includes mermaid-lint] + vulncheck + gitleaks + Trivy fs scan)                 |
-| **test**             | after build                         | Unit tests across SDK + backend (with coverage)                                                                           |
-| **integration-test** | after build                         | Backend integration tests with Postgres service + Dapr sidecar                                                            |
-| **web-nextjs**       | after changes                       | Lint, test & build Next.js SSR frontend                                                                                   |
-| **e2e**              | after integration-test + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`)                                                                         |
-| **ci-pass**          | after all above                     | Gate job — fails if any required job failed or was cancelled                                                              |
+| Job                  | Triggers                            | Steps                                                                                                                                |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **changes**          | push, PR, tags                      | Detect code changes (skips heavy jobs on docs-only PRs via [`dorny/paths-filter`](https://github.com/dorny/paths-filter))             |
+| **build**            | after changes                       | Compile SDK, lint & test SDK, upload `sdk-build` artifact                                                                            |
+| **static-check**     | after changes                       | Composite gate: `make static-check` (lint + mermaid-lint + vulncheck + gitleaks + Trivy fs scan + deps-prune-check)                  |
+| **test**             | after build                         | Unit tests across SDK + backend (with coverage)                                                                                      |
+| **integration-test** | after build                         | Backend integration tests with Postgres service + Dapr sidecar                                                                       |
+| **web-nextjs**       | after changes                       | Lint, test & build Next.js SSR frontend                                                                                              |
+| **e2e**              | after integration-test + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`) + OWASP ZAP baseline DAST                                                          |
+| **docker**           | after static-check + build + test   | Matrix (backend-ts, web-nextjs): single-arch build → Trivy image scan → smoke test → multi-arch validation build (no push); cache via GHA |
+| **ci-pass**          | after all above                     | Gate job — fails if any required job failed or was cancelled                                                                         |
 
 The `changes` detector keeps doc-only changes from running heavy jobs while still triggering the workflow (so Repository Rulesets gating on `ci-pass` are satisfied).
 

@@ -302,7 +302,7 @@ trivy-fs: deps
 	   --exit-code 1 \
 	   .
 
-#static-check: @ Composite quality gate: lint + vulncheck + secrets + trivy-fs + mermaid-lint
+#static-check: @ Composite quality gate: lint + mermaid-lint + vulncheck + secrets + trivy-fs + deps-prune-check
 static-check: lint mermaid-lint vulncheck secrets trivy-fs deps-prune-check
 
 #test: @ Run unit tests across SDK and backend
@@ -548,10 +548,10 @@ e2e-aca:
 	   ACR=$$(cd infra/azure && terraform output -raw container_registry_login_server); \
 	 fi && \
 	 az acr login --name "$${ACR%%.*}" && \
-	 docker build -t $$ACR/backend-ts:$$SHA -f app/backend-ts/Dockerfile . && \
-	 docker build -t $$ACR/web-nextjs:$$SHA -f app/web-nextjs/Dockerfile . && \
-	 docker push $$ACR/backend-ts:$$SHA && \
-	 docker push $$ACR/web-nextjs:$$SHA && \
+	 $(CONTAINER_CMD) build -t $$ACR/backend-ts:$$SHA -f app/backend-ts/Dockerfile . && \
+	 $(CONTAINER_CMD) build -t $$ACR/web-nextjs:$$SHA -f app/web-nextjs/Dockerfile . && \
+	 $(CONTAINER_CMD) push $$ACR/backend-ts:$$SHA && \
+	 $(CONTAINER_CMD) push $$ACR/web-nextjs:$$SHA && \
 	 printf '\n***terraform apply (tag=%s)***\n\n' "$$SHA" && \
 	 cd infra/azure && terraform apply -input=false -auto-approve \
 	   -var "backend_image_tag=$$SHA" -var "nextjs_image_tag=$$SHA" && cd ../.. && \
