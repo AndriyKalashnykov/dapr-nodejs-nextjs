@@ -130,8 +130,8 @@
       "groupName": "Docker base images"
     },
     {
-      "description": "Group Node.js version updates (mise + dockerfile + docker-compose)",
-      "matchPackageNames": ["node"],
+      "description": "Group Node.js version updates (mise + dockerfile + docker-compose). mise's lookup yields packageName 'node'; the dockerfile + docker-compose managers normalize to 'docker.io/node' — both forms must be listed so a Node-major bump lands on a single grouped branch instead of splitting across two PRs (silent drift trap).",
+      "matchPackageNames": ["node", "docker.io/node"],
       "matchManagers": ["dockerfile", "docker-compose", "mise"],
       "groupName": "Node.js"
     },
@@ -155,7 +155,7 @@
     {
       "customType": "regex",
       "description": "Track `corepack prepare pnpm@X.Y.Z` literals in Dockerfiles — keeps them in lockstep with package.json packageManager (npm manager tracks that field separately)",
-      "managerFilePatterns": ["/(^|/)Dockerfile(\\..+)?$/"],
+      "managerFilePatterns": ["**/Dockerfile", "**/Dockerfile.*"],
       "matchStrings": [
         "corepack\\s+prepare\\s+pnpm@(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)"
       ],

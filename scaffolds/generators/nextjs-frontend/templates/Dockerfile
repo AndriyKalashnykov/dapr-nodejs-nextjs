@@ -2,7 +2,7 @@
 # Build context is the repo root.
 FROM docker.io/node:24-alpine@sha256:2bdb65ed1dab192432bc31c95f94155ca5ad7fc1392fb7eb7526ab682fa5bf14 AS build
 ENV NODE_ENV=production
-RUN corepack enable && corepack prepare pnpm@11.2.1 --activate
+RUN corepack enable && corepack prepare pnpm@11.2.2 --activate
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # hadolint ignore=DL3021
