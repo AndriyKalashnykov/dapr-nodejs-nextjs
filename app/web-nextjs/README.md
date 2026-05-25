@@ -47,7 +47,7 @@ Requires `JWT_SECRET_KEY=secret` (or whatever the running backend signs with) an
 ## Build
 
 ```bash
-pnpm --filter web-nextjs run build       # next build, requires JWT_SECRET_KEY env var
+pnpm --filter web-nextjs run build       # next build
 ```
 
 Production runtime uses Next.js standalone output: `node app/web-nextjs/server.js` (no pnpm/corepack at

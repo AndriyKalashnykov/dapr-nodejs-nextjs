@@ -601,7 +601,7 @@ web-nextjs-integration: install
 web-nextjs-ci: install
 	@pnpm --filter web-nextjs run lint
 	@pnpm --filter web-nextjs run test:cov
-	@JWT_SECRET_KEY=ci-build-placeholder pnpm --filter web-nextjs run build
+	@pnpm --filter web-nextjs run build
 
 # ── Database ─────────────────────────────────────────────────────────────────
 

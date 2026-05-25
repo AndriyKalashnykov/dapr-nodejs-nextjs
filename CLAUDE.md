@@ -93,7 +93,7 @@ cd app/backend-ts && NODE_ENV=test pnpm exec vitest --config src/lib/test/vitest
 
 ```bash
 pnpm run dev    # Next.js dev server
-pnpm run build  # Production build (requires JWT_SECRET_KEY env var)
+pnpm run build  # Production build
 pnpm run lint   # eslint .
 pnpm run test   # Vitest unit tests (watch mode)
 pnpm run test:cov # Vitest unit tests with coverage (single run)
