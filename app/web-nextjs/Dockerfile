@@ -8,12 +8,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY app/web-nextjs ./app/web-nextjs
 RUN pnpm install --frozen-lockfile --filter web-nextjs...
 WORKDIR /workspace/app/web-nextjs
-# Next.js validates the JWT signing key at module init for /api/auth, so the
-# `pnpm run build` page-data collection fails without one. The runtime value
-# comes from Key Vault (ACA) or .env (local); a placeholder is sufficient
-# for the build itself.
-ARG JWT_SECRET_KEY=build-time-placeholder
-ENV JWT_SECRET_KEY=$JWT_SECRET_KEY
 RUN pnpm run build
 
 # Runtime — Next.js standalone output. The build stage emits a self-contained

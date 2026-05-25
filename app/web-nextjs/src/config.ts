@@ -17,10 +17,16 @@ const dapr = {
 };
 const env = getEnv();
 
-const jwtSecretKey = process.env.JWT_SECRET_KEY || "";
-if (!jwtSecretKey) {
-  throw new Error("Server configuration error, missing JWT signing key.");
-}
+// Lazy so `next build`'s static page-data collection doesn't need the value
+// (the import chain pulls config.ts into the build graph). Validates on first
+// sign/verify call instead — see app/web-nextjs/src/lib/session.ts.
+const getJwtSecretKey = () => {
+  const key = process.env.JWT_SECRET_KEY || "";
+  if (!key) {
+    throw new Error("Server configuration error, missing JWT signing key.");
+  }
+  return key;
+};
 
 const cookie = {
   name: process.env.COOKIE_NAME || "session",
@@ -32,4 +38,4 @@ const cookie = {
   sameSite: process.env.COOKIE_SAME_SITE || "lax",
 };
 
-export { dapr, env, cookie, jwtSecretKey };
+export { dapr, env, cookie, getJwtSecretKey };
