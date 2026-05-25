@@ -9,6 +9,12 @@ services:
       - "4318:4318"
     volumes:
       - "./config/prometheus.yaml:/otel-lgtm/prometheus.yaml"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: ${COMPOSE_HEALTHCHECK_INTERVAL:-10s}
+      timeout: ${COMPOSE_HEALTHCHECK_TIMEOUT:-3s}
+      retries: ${COMPOSE_HEALTHCHECK_RETRIES:-30}
+      start_period: ${COMPOSE_HEALTHCHECK_START_PERIOD:-60s}
     networks:
       - dapr-net
 

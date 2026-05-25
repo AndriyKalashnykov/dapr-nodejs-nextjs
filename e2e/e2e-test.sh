@@ -115,7 +115,7 @@ echo "[1/8] Waiting for services..."
 wait_for "Backend direct"        "http://localhost:${BACKEND_PORT}/docs" 90 || exit 1
 wait_for "Backend via Dapr"      "http://localhost:${DAPR_PORT}/v1.0/healthz" 90 || exit 1
 wait_for "Next.js SSR frontend"  "http://localhost:${NEXTJS_PORT}" 90 || exit 1
-wait_for "Grafana OTEL"          "http://localhost:${OTEL_PORT}"   120 || exit 1
+wait_for "Grafana OTEL"          "http://localhost:${OTEL_PORT}"   240 || exit 1
 echo
 
 echo "[2/8] Service health probes..."
