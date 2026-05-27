@@ -26,7 +26,7 @@ services:
       - dapr-net
   # Dapr state and pubsub provider
   redis:
-    image: "docker.io/redis:8-alpine@sha256:db23de1b61f3b4707e3e5f4a192ae085a2bf1521173f8ab3183d32ddab0ca0fb"
+    image: "docker.io/redis:8-alpine@sha256:ad0a6eff0a40304ab1ab4f50f0dc192d82b071e1094eac961bcb6106092f8a4e"
     restart: always
     ports:
       - "6379:6379"
