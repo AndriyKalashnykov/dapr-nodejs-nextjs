@@ -33,7 +33,7 @@ services:
       - "sos.service-type=microservice"
       - "dapr.io/enabled=true"  # Enable Dapr for this service
       - "dapr.io/config=configstore"
-    image: "docker.io/daprio/daprd:1.17.7@sha256:d8a6c8fe0ee893eab6d74b7d685a31d5ba6e50eae0edc1c59163a0decafb2055"
+    image: "docker.io/daprio/daprd:1.17.8@sha256:9e376bae063888cc1c5e109b8ddd0ceda7f3f858bb92b191c83e460a3d590117"
     command: [
       "./daprd",
       "--app-id", "<%= name %>",
