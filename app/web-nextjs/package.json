@@ -22,7 +22,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.15",
+    "@biomejs/biome": "2.4.16",
     "@next/eslint-plugin-next": "16.2.6",
     "@tailwindcss/postcss": "4.3.0",
     "@types/jsonwebtoken": "9.0.10",
