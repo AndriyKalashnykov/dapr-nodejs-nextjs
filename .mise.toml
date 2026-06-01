@@ -26,7 +26,7 @@ node = "24"
 "aqua:dapr/cli" = "1.17.1"
 
 # Local GitHub Actions runner (for `make ci-run`).
-"aqua:nektos/act" = "0.2.88"
+"aqua:nektos/act" = "0.2.89"
 
 # Dockerfile lint (wired into `make lint`).
 "aqua:hadolint/hadolint" = "2.14.0"
