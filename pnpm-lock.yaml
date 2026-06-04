@@ -65,7 +65,7 @@ importers:
         version: 5.2.1
       express-zod-api:
         specifier: ^28.0.0
-        version: 28.1.0(@types/compression@1.8.1)(@types/express@5.0.6)(@types/http-errors@2.0.5)(@types/node@24.12.4)(compression@1.8.1)(express@5.2.1)(http-errors@2.0.1)(typescript@6.0.3)(zod@4.4.3)
+        version: 28.1.1(@types/compression@1.8.1)(@types/express@5.0.6)(@types/http-errors@2.0.5)(@types/node@24.12.4)(compression@1.8.1)(express@5.2.1)(http-errors@2.0.1)(typescript@6.0.3)(zod@4.4.3)
       helmet:
         specifier: ^8.2.0
         version: 8.2.0
@@ -256,7 +256,7 @@ importers:
         version: 5.2.1
       express-zod-api:
         specifier: ^28.0.0
-        version: 28.1.0(@types/compression@1.8.1)(@types/express@5.0.6)(@types/http-errors@2.0.5)(@types/node@24.12.4)(compression@1.8.1)(express@5.2.1)(http-errors@2.0.1)(typescript@6.0.3)(zod@4.4.3)
+        version: 28.1.1(@types/compression@1.8.1)(@types/express@5.0.6)(@types/http-errors@2.0.5)(@types/node@24.12.4)(compression@1.8.1)(express@5.2.1)(http-errors@2.0.1)(typescript@6.0.3)(zod@4.4.3)
       helmet:
         specifier: ^8.2.0
         version: 8.2.0
@@ -1885,8 +1885,8 @@ packages:
     resolution: {integrity: sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg==}
     engines: {node: '>=8'}
 
-  ansis@4.3.0:
-    resolution: {integrity: sha512-44mvgtPvohuU/70DdY5Oz2AIrLJ9k6/5x4KmoSvPwO+5Moijo0+N9D0fKbbYZQWP1hNm5CpOf+E01jhxG/r8xg==}
+  ansis@4.3.1:
+    resolution: {integrity: sha512-BJ8/l4R5LRE7hW9WdSuGYrLSHi2ynxeFpDFbH0K/CgNeY/tyhk+vO6TYxXC5r5CpUhNVX310xzPsN/H9lCdfOA==}
     engines: {node: '>=14'}
 
   arg@4.1.3:
@@ -2231,8 +2231,8 @@ packages:
     resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
     engines: {node: '>=12.0.0'}
 
-  express-zod-api@28.1.0:
-    resolution: {integrity: sha512-fEGJyBqQzHdK48jHtSjaeeMnVJ+7Lg54iyS8VNsZG5zw5GuC9kmga+GcPSX3lBO+tFIDgDpbJeg7QR9aKKj1Tg==}
+  express-zod-api@28.1.1:
+    resolution: {integrity: sha512-7V35T9UBfoG5SFY3rAHwnCZin5VsjrKOssiNnnIcagFqDbPGA9VC4+ndXd3oyI08ycIoZI0cZQWgYWmmoAAYvg==}
     engines: {node: ^22.19.0 || ^24.0.0 || ^26.0.0}
     peerDependencies:
       '@express-zod-api/zod-plugin': ^5.0.0
@@ -2902,8 +2902,8 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openapi3-ts@4.5.0:
-    resolution: {integrity: sha512-jaL+HgTq2Gj5jRcfdutgRGLosCy/hT8sQf6VOy+P+g36cZOjI1iukdPnijC+4CmeRzg/jEllJUboEic2FhxhtQ==}
+  openapi3-ts@4.6.0:
+    resolution: {integrity: sha512-a4sfn6L2sIShhtzJqmjGrARvxAW/3F2BJDdyRVvNF9VhAsZSh5hSyI3a9TNvmzBxXmq66nY5LNT5bQcBxYAZZg==}
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -3313,6 +3313,10 @@ packages:
 
   tinyglobby@0.2.16:
     resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==}
+    engines: {node: '>=12.0.0'}
+
+  tinyglobby@0.2.17:
+    resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
 
   tinyrainbow@3.1.0:
@@ -5168,7 +5172,7 @@ snapshots:
     dependencies:
       color-convert: 2.0.1
 
-  ansis@4.3.0: {}
+  ansis@4.3.1: {}
 
   arg@4.1.3: {}
 
@@ -5513,13 +5517,13 @@ snapshots:
 
   expect-type@1.3.0: {}
 
-  express-zod-api@28.1.0(@types/compression@1.8.1)(@types/express@5.0.6)(@types/http-errors@2.0.5)(@types/node@24.12.4)(compression@1.8.1)(express@5.2.1)(http-errors@2.0.1)(typescript@6.0.3)(zod@4.4.3):
+  express-zod-api@28.1.1(@types/compression@1.8.1)(@types/express@5.0.6)(@types/http-errors@2.0.5)(@types/node@24.12.4)(compression@1.8.1)(express@5.2.1)(http-errors@2.0.1)(typescript@6.0.3)(zod@4.4.3):
     dependencies:
-      ansis: 4.3.0
+      ansis: 4.3.1
       express: 5.2.1
       http-errors: 2.0.1
       node-mocks-http: 1.17.2(@types/express@5.0.6)(@types/node@24.12.4)
-      openapi3-ts: 4.5.0
+      openapi3-ts: 4.6.0
       ramda: 0.32.0
       zod: 4.4.3
     optionalDependencies:
@@ -6150,7 +6154,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openapi3-ts@4.5.0:
+  openapi3-ts@4.6.0:
     dependencies:
       yaml: 2.9.0
 
@@ -6622,6 +6626,11 @@ snapshots:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
 
+  tinyglobby@0.2.17:
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.4)
+      picomatch: 4.0.4
+
   tinyrainbow@3.1.0: {}
 
   to-regex-range@5.0.1:
@@ -6726,7 +6735,7 @@ snapshots:
       picomatch: 4.0.4
       postcss: 8.5.15
       rolldown: 1.0.2
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 24.12.4
       esbuild: 0.28.0
