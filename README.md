@@ -27,22 +27,22 @@ The hero diagram is intentionally Context-level (one box): "what is this and who
 
 ## Tech Stack
 
-| Component          | Technology                                                                     |
-| ------------------ | ------------------------------------------------------------------------------ |
-| Language           | TypeScript 6 / Node.js 24                                                      |
-| Backend framework  | Express 5 + `express-zod-api`                                                  |
-| Frontend framework | Next.js 16 (App Router, SSR)                                                   |
-| Database           | PostgreSQL 18 + Knex.js migrations                                             |
-| Dapr runtime       | Dapr 1.17.6 runtime, CLI 1.17.1 (placement + scheduler + sidecar per service)  |
-| State / pub/sub    | Redis 8                                                                        |
-| Auth               | JWT via `jsonwebtoken` (dev secret in `.env`)                                  |
-| Observability      | OpenTelemetry SDK → Zipkin + Grafana OTEL stack                                |
-| Tests              | Vitest 4 (unit + integration), shell-based compose e2e, Playwright browser e2e |
-| Container runtime  | Podman 4.9+ (Docker-compatible); `docker compose` in CI                        |
+| Component          | Technology                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Language           | TypeScript 6 / Node.js 24                                                                                                            |
+| Backend framework  | Express 5 + `express-zod-api`                                                                                                        |
+| Frontend framework | Next.js 16 (App Router, SSR)                                                                                                         |
+| Database           | PostgreSQL 18 + Knex.js migrations                                                                                                   |
+| Dapr runtime       | Dapr 1.17.6 runtime, CLI 1.17.1 (placement + scheduler + sidecar per service)                                                        |
+| State / pub/sub    | Redis 8                                                                                                                              |
+| Auth               | JWT via `jsonwebtoken` (dev secret in `.env`)                                                                                        |
+| Observability      | OpenTelemetry SDK → Zipkin + Grafana OTEL stack                                                                                      |
+| Tests              | Vitest 4 (unit + integration), shell-based compose e2e, Playwright browser e2e                                                       |
+| Container runtime  | Podman 4.9+ (Docker-compatible); `docker compose` in CI                                                                              |
 | Monorepo           | pnpm v11 workspaces (`app/*`, `packages/@sos/*`); config in `pnpm-workspace.yaml` (`allowBuilds`, `overrides`, `publicHoistPattern`) |
-| Toolchain pinning  | [mise](https://mise.jdx.dev/) (`.mise.toml`) — Node, pnpm, dapr CLI, act, hadolint, tflint, gitleaks, Trivy, Terraform |
-| Dependency mgmt    | [Renovate](https://docs.renovatebot.com/) (config in `renovate.json`) with `automerge: true` + GitHub Dependabot Alerts fast-track |
-| Production target  | Azure Container Apps (`infra/azure/`, Terraform)                               |
+| Toolchain pinning  | [mise](https://mise.jdx.dev/) (`.mise.toml`) — Node, pnpm, dapr CLI, act, hadolint, tflint, gitleaks, Trivy, Terraform               |
+| Dependency mgmt    | [Renovate](https://docs.renovatebot.com/) (config in `renovate.json`) with `automerge: true` + GitHub Dependabot Alerts fast-track   |
+| Production target  | Azure Container Apps (`infra/azure/`, Terraform)                                                                                     |
 
 ## Quick Start
 
@@ -350,19 +350,19 @@ Run `make help` to see all targets.
 
 ### Code Quality
 
-| Target                              | Description                                                                                                              |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `make format`                       | Auto-format code with Prettier across all workspaces                                                                     |
-| `make format-check`                 | Verify Prettier formatting (CI gate; pairs with `make format`)                                                           |
-| `make lint`                         | Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate)                      |
-| `make lint-scripts-exec`            | Fail if any tracked shell script under `scripts/` is missing the executable bit                                          |
-| `make lint-docker-no-runtime-pnpm`  | Fail if a production Dockerfile's runtime CMD invokes pnpm (corepack per-user activation trap)                           |
-| `make vulncheck`                    | Run pnpm audit for known vulnerabilities (fails on moderate+)                                                            |
-| `make secrets`                      | Scan repo for committed secrets via `gitleaks`                                                                           |
-| `make trivy-fs`                     | Trivy filesystem scan — CVEs + secrets + Dockerfile misconfigs (CRITICAL,HIGH)                                           |
-| `make mermaid-lint`                 | Validate every ` ```mermaid ` block in markdown via pinned `minlag/mermaid-cli`                                          |
-| `make static-check`                 | Composite quality gate: `lint` + `mermaid-lint` + `vulncheck` + `secrets` + `trivy-fs` + `deps-prune-check`              |
-| `make deps-prune-check`             | Fail if any workspace has unused dependencies (CI gate via `depcheck`)                                                   |
+| Target                             | Description                                                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `make format`                      | Auto-format code with Prettier across all workspaces                                                        |
+| `make format-check`                | Verify Prettier formatting (CI gate; pairs with `make format`)                                              |
+| `make lint`                        | Run lint and typecheck across all workspaces (also: hadolint, scripts +x guard, terraform validate)         |
+| `make lint-scripts-exec`           | Fail if any tracked shell script under `scripts/` is missing the executable bit                             |
+| `make lint-docker-no-runtime-pnpm` | Fail if a production Dockerfile's runtime CMD invokes pnpm (corepack per-user activation trap)              |
+| `make vulncheck`                   | Run pnpm audit for known vulnerabilities (fails on moderate+)                                               |
+| `make secrets`                     | Scan repo for committed secrets via `gitleaks`                                                              |
+| `make trivy-fs`                    | Trivy filesystem scan — CVEs + secrets + Dockerfile misconfigs (CRITICAL,HIGH)                              |
+| `make mermaid-lint`                | Validate every ` ```mermaid ` block in markdown via pinned `minlag/mermaid-cli`                             |
+| `make static-check`                | Composite quality gate: `lint` + `mermaid-lint` + `vulncheck` + `secrets` + `trivy-fs` + `deps-prune-check` |
+| `make deps-prune-check`            | Fail if any workspace has unused dependencies (CI gate via `depcheck`)                                      |
 
 ### Testing (three-layer pyramid)
 
@@ -402,17 +402,17 @@ Run `make help` to see all targets.
 
 ### Terraform / ACA images
 
-| Target                                                        | Description                                                   |
-| ------------------------------------------------------------- | ------------------------------------------------------------- |
-| `make tf-init`                                                | `terraform init` in `infra/azure/` (no backend prompt)        |
-| `make tf-apply-acr`                                           | Targeted apply: provision only the Azure Container Registry   |
-| `make tf-acr-login-server`                                    | Print the ACR login server FQDN (requires `make tf-init`)     |
-| `make tf-apply`                                               | Full Terraform apply (requires `GIT_SHA` and provisioned ACR) |
-| `make tf-destroy`                                             | Destroy the ACA stack (requires `GIT_SHA` used at apply time) |
-| `SERVICE=… IMAGE_TAG=… make image-build-prod`                 | Build a production image (single-arch, `--load` for scan)     |
-| `SERVICE=… IMAGE_TAG=… make image-smoke-test`                 | Boot a built image and verify it starts cleanly (Pattern A gate 3) |
-| `SERVICE=… IMAGE_TAG=… make image-scan-prod`                  | Trivy scan a previously built production image                |
-| `SERVICE=… IMAGE_TAG=… REGISTRY=… make image-push-multi-arch` | Build multi-arch (amd64+arm64) and push to ACR                |
+| Target                                                  | Description                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| `make tf-init`                                          | `terraform init` in `infra/azure/` (no backend prompt)             |
+| `make tf-apply-acr`                                     | Targeted apply: provision only the Azure Container Registry        |
+| `make tf-acr-login-server`                              | Print the ACR login server FQDN (requires `make tf-init`)          |
+| `make tf-apply`                                         | Full Terraform apply (requires `GIT_SHA` and provisioned ACR)      |
+| `make tf-destroy`                                       | Destroy the ACA stack (requires `GIT_SHA` used at apply time)      |
+| `SERVICE=… IMAGE_TAG=… make image-build-prod`           | Build a production image (single-arch, `--load` for scan)          |
+| `SERVICE=… IMAGE_TAG=… make image-smoke-test`           | Boot a built image and verify it starts cleanly (Pattern A gate 3) |
+| `SERVICE=… IMAGE_TAG=… make image-scan-prod`            | Trivy scan a previously built production image                     |
+| `SERVICE=… IMAGE_TAG=… REGISTRY=… make image-push-prod` | Build an amd64 image and push to ACR                               |
 
 ### Diagnostics
 
@@ -433,14 +433,14 @@ Run `make help` to see all targets.
 
 ### CI / Release
 
-| Target                        | Description                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------ |
+| Target                        | Description                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------- |
 | `make ci`                     | Run full CI pipeline locally (`format-check` + `static-check` + `test` + `build`) |
-| `make ci-run`                 | Run GitHub Actions workflow locally using [act](https://github.com/nektos/act) |
-| `make check-version`          | Ensure VERSION variable is set and follows semver (vX.Y.Z)                     |
-| `make release VERSION=v1.0.0` | Create and push a release tag                                                  |
-| `make renovate-validate`      | Validate Renovate configuration                                                |
-| `make dast`                   | ZAP baseline DAST scan against the running stack (requires `make up -d` first) |
+| `make ci-run`                 | Run GitHub Actions workflow locally using [act](https://github.com/nektos/act)    |
+| `make check-version`          | Ensure VERSION variable is set and follows semver (vX.Y.Z)                        |
+| `make release VERSION=v1.0.0` | Create and push a release tag                                                     |
+| `make renovate-validate`      | Validate Renovate configuration                                                   |
+| `make dast`                   | ZAP baseline DAST scan against the running stack (requires `make up -d` first)    |
 
 ## Database migrations
 
@@ -459,17 +459,17 @@ Migrations also run automatically on backend startup via `pnpm run dev`.
 
 GitHub Actions runs on every push to `main`, tags `v*`, and pull requests.
 
-| Job                  | Triggers                            | Steps                                                                                                                                |
-| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **changes**          | push, PR, tags                      | Detect code changes (skips heavy jobs on docs-only PRs via [`dorny/paths-filter`](https://github.com/dorny/paths-filter))             |
-| **build**            | after changes                       | Compile SDK, lint & test SDK, upload `sdk-build` artifact                                                                            |
-| **static-check**     | after changes                       | Composite gate: `make static-check` (lint + mermaid-lint + vulncheck + gitleaks + Trivy fs scan + deps-prune-check)                  |
-| **test**             | after build                         | Unit tests across SDK + backend (with coverage)                                                                                      |
-| **integration-test** | after build                         | Backend integration tests with Postgres service + Dapr sidecar                                                                       |
-| **web-nextjs**       | after changes                       | Lint, test & build Next.js SSR frontend                                                                                              |
-| **e2e**              | after integration-test + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`) + OWASP ZAP baseline DAST                                                          |
-| **docker**           | after static-check + build + test   | Matrix (backend-ts, web-nextjs): single-arch build → Trivy image scan → smoke test → multi-arch validation build (no push); cache via GHA |
-| **ci-pass**          | after all above                     | Gate job — fails if any required job failed or was cancelled                                                                         |
+| Job                  | Triggers                            | Steps                                                                                                                     |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **changes**          | push, PR, tags                      | Detect code changes (skips heavy jobs on docs-only PRs via [`dorny/paths-filter`](https://github.com/dorny/paths-filter)) |
+| **build**            | after changes                       | Compile SDK, lint & test SDK, upload `sdk-build` artifact                                                                 |
+| **static-check**     | after changes                       | Composite gate: `make static-check` (lint + mermaid-lint + vulncheck + gitleaks + Trivy fs scan + deps-prune-check)       |
+| **test**             | after build                         | Unit tests across SDK + backend (with coverage)                                                                           |
+| **integration-test** | after build                         | Backend integration tests with Postgres service + Dapr sidecar                                                            |
+| **web-nextjs**       | after changes                       | Lint, test & build Next.js SSR frontend                                                                                   |
+| **e2e**              | after integration-test + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`) + OWASP ZAP baseline DAST                                               |
+| **docker**           | after static-check + build + test   | Matrix (backend-ts, web-nextjs): amd64 build → Trivy image scan → smoke test (no push)                                    |
+| **ci-pass**          | after all above                     | Gate job — fails if any required job failed or was cancelled                                                              |
 
 The `changes` detector keeps doc-only changes from running heavy jobs while still triggering the workflow (so Repository Rulesets gating on `ci-pass` are satisfied).
 
@@ -503,13 +503,13 @@ Set secrets via **Settings → Secrets and variables → Actions → New reposit
 
 The `ci.yml` `docker` job and the `e2e-aca.yml` ACA-deploy workflow run the following gates **before** pushing any image. Any failure blocks the push.
 
-| #   | Gate                                          | Catches                                                                                          | Tool                                                            |
-| --- | --------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| 1   | Build local single-arch image                 | Build regressions on amd64                                                                       | `docker buildx build --load --cache-from type=gha`              |
-| 2   | **Trivy image scan** (CRITICAL/HIGH blocking) | CVEs in the base image, OS packages, build layers; misconfigs; secret leaks in layers            | `aquasecurity/trivy-action` with `image-ref:`                   |
-| 3   | **Smoke test**                                | Image boots cleanly on its own (boot-marker `listening`/`Ready in`/`started on port` within 30s) | `make image-smoke-test`                                         |
-| 4   | Multi-arch build + push (ACA only)            | Publishes for both `linux/amd64` and `linux/arm64`                                               | `docker buildx build --platform linux/amd64,linux/arm64 --push` |
-| 5   | **Cosign keyless OIDC signing** (ACA only)    | Sigstore signature on the manifest digest                                                        | `sigstore/cosign-installer` + `cosign sign --yes`               |
+| #   | Gate                                          | Catches                                                                                          | Tool                                                |
+| --- | --------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| 1   | Build local amd64 image                       | Build regressions on amd64                                                                       | `docker buildx build --load`                        |
+| 2   | **Trivy image scan** (CRITICAL/HIGH blocking) | CVEs in the base image, OS packages, build layers; misconfigs; secret leaks in layers            | `aquasecurity/trivy-action` with `image-ref:`       |
+| 3   | **Smoke test**                                | Image boots cleanly on its own (boot-marker `listening`/`Ready in`/`started on port` within 30s) | `make image-smoke-test`                             |
+| 4   | Build + push (ACA only)                       | Publishes `linux/amd64` (ACA runs amd64 only)                                                    | `docker buildx build --platform linux/amd64 --push` |
+| 5   | **Cosign keyless OIDC signing** (ACA only)    | Sigstore signature on the manifest digest                                                        | `sigstore/cosign-installer` + `cosign sign --yes`   |
 
 `ignore-unfixed: true` skips CVEs with no upstream fix available. Buildkit in-manifest attestations (`provenance` and `sbom`) are explicitly disabled (`--provenance=false --sbom=false`) so the OCI image index stays free of `unknown/unknown` platform entries — supply-chain verification comes from cosign keyless signing instead.
 
