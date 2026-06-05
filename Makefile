@@ -465,10 +465,9 @@ image-build-prod: deps
 	@: $${IMAGE_TAG:?required — image tag}
 	# No --cache-{from,to} type=gha here: that backend needs
 	# ACTIONS_CACHE_URL + ACTIONS_RUNTIME_TOKEN exposed to the runner
-	# (via crazy-max/ghaction-github-runtime). The multi-arch validation
-	# build via docker/build-push-action in ci.yml's `docker` job handles
-	# GHA cache automatically; this single-arch scan-stage build doesn't
-	# need it.
+	# (via crazy-max/ghaction-github-runtime). This amd64 scan-stage build
+	# is fast enough to not need it; the e2e-aca.yml push step uses
+	# docker/build-push-action, which wires GHA cache automatically.
 	@$(CONTAINER_CMD) buildx build --load \
 	   --tag "$$SERVICE:$$IMAGE_TAG" \
 	   -f app/$$SERVICE/Dockerfile .
@@ -512,20 +511,21 @@ image-scan-prod: deps
 	   --exit-code 1 \
 	   "$$SERVICE:$$IMAGE_TAG"
 
-#image-push-multi-arch: @ Build + push multi-arch (linux/amd64,linux/arm64) to REGISTRY; requires SERVICE + IMAGE_TAG + REGISTRY
+#image-push-prod: @ Build + push an amd64 image to REGISTRY; requires SERVICE + IMAGE_TAG + REGISTRY
+# amd64 only — ACA, the deploy target, runs amd64 (see docs/deploy-aca.md).
 # Pattern A: --provenance=false --sbom=false keep the OCI image index free of
 # `unknown/unknown` attestation-manifest entries. Cosign keyless OIDC signing
 # (run after this step in CI) provides supply-chain verification.
-image-push-multi-arch: deps
+image-push-prod: deps
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
 	@: $${IMAGE_TAG:?required — image tag}
 	@: $${REGISTRY:?required — fully-qualified registry FQDN (e.g. myacr.azurecr.io)}
 	# No --cache-{from,to} type=gha here — see comment on image-build-prod.
-	# The e2e-aca workflow path uses this target; for ci.yml's `docker`
-	# job, the multi-arch validation goes through docker/build-push-action
-	# which exposes GHA cache env vars correctly.
+	# This is a convenience target for manual pushes; e2e-aca.yml's publish
+	# job pushes via docker/build-push-action (which exposes GHA cache env
+	# vars correctly), not this recipe.
 	@$(CONTAINER_CMD) buildx build \
-	   --platform linux/amd64,linux/arm64 \
+	   --platform linux/amd64 \
 	   --push \
 	   --provenance=false \
 	   --sbom=false \
@@ -742,7 +742,7 @@ renovate-validate: deps
         web-nextjs-ci web-nextjs-test web-nextjs-integration \
         e2e e2e-browser e2e-aca dast infra-validate mermaid-lint \
         tf-init tf-apply-acr tf-acr-login-server tf-apply tf-destroy \
-        image-build-prod image-scan-prod image-smoke-test image-push-multi-arch \
+        image-build-prod image-scan-prod image-smoke-test image-push-prod \
         psql migrate redis-cli shell logs \
         prune login update upgrade \
         ci check-version release ci-run renovate-validate

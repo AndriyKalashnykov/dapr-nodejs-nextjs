@@ -355,10 +355,9 @@ jobs:
         run: docker compose down -v
 
   # ── Docker (Pattern A pre-push hardening, no push) ─────────────────────────
-  # Pattern A "build twice" gates per /harden-image-pipeline:
-  #   1. Single-arch (amd64) load → Trivy image scan + smoke test
-  #   2. Multi-arch validation build (push: false) — catches arm64 cross-
-  #      compile regressions on the commit that introduced them
+  # Pattern A gates per /harden-image-pipeline (amd64 only — ACA, the sole
+  # deploy target, runs amd64; see docs/deploy-aca.md):
+  #   1. amd64 load → Trivy image scan + smoke test
   # Images are NOT pushed here; actual registry pushes happen in `e2e-aca.yml`.
   docker:
     needs: [changes, static-check, build, test]
@@ -379,23 +378,10 @@ jobs:
           install: true
           cache: true
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
-        with:
-          images: ${{ matrix.service }}
-          tags: |
-            type=sha,prefix=,format=long
-          flavor: |
-            latest=false
-
-      # Gate 1 — single-arch load for scanning + smoke testing.
+      # Gate 1 — amd64 load for scanning + smoke testing.
       - name: Build image for scan
         run: make image-build-prod
         env:
@@ -419,23 +405,6 @@ jobs:
         env:
           SERVICE: ${{ matrix.service }}
           IMAGE_TAG: ${{ github.sha }}
-
-      # Gate 4 — multi-arch validation (push: false). Catches arm64 cross-
-      # compile regressions before the manual `e2e-aca.yml` workflow tries to
-      # push to ACR. ~95% cache-hit from Gate 1 via type=gha.
-      - name: Multi-arch validation build
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        with:
-          context: .
-          file: app/${{ matrix.service }}/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: false
-          provenance: false
-          sbom: false
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   # ── Gate ───────────────────────────────────────────────────────────────────
   ci-pass:

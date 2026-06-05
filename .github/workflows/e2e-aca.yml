@@ -72,8 +72,8 @@ jobs:
 
   # ── Phase 2: per-service build/scan/smoke/push/sign in parallel ───────────
   # Matrix-fans out the duplicated per-service step blocks. Each matrix entry:
-  #   1. Builds single-arch image, scans with Trivy, smoke-tests it
-  #   2. Builds multi-arch (amd64+arm64) and pushes to ACR
+  #   1. Builds the amd64 image, scans with Trivy, smoke-tests it
+  #   2. Builds amd64 and pushes to ACR (ACA runs amd64 only)
   #   3. Cosign-signs the published manifest digest (keyless OIDC)
   # Both services build in parallel — wall-clock = max(per-service), not sum.
   publish:
@@ -102,9 +102,6 @@ jobs:
         with:
           install: true
           cache: true
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
@@ -149,16 +146,18 @@ jobs:
           SERVICE: ${{ matrix.service }}
           IMAGE_TAG: ${{ github.sha }}
 
-      # Pattern A gate 4 — multi-arch build + push. ~95% cache-hit from the
-      # scan build via type=gha. provenance/sbom both false to keep the OCI
-      # image index free of `unknown/unknown` attestation entries.
+      # Pattern A gate 4 — amd64 build + push (ACA runs amd64 only). The scan
+      # build (gate 1) uses `make image-build-prod`, which does not write the
+      # type=gha cache; this step's own cache-to mode=max warms it across runs.
+      # provenance/sbom both false to keep the OCI image index free of
+      # `unknown/unknown` attestation entries.
       - name: Build and push
         id: push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           file: app/${{ matrix.service }}/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           provenance: false
           sbom: false
