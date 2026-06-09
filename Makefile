@@ -645,7 +645,7 @@ update: deps
 	@pnpm update
 
 # renovate: datasource=npm depName=npm-check-updates
-NPM_CHECK_UPDATES_VERSION := 22.2.2
+NPM_CHECK_UPDATES_VERSION := 22.2.3
 
 #upgrade: @ Upgrade pnpm dependencies to latest versions (ignoring ranges)
 upgrade: deps
@@ -717,7 +717,7 @@ ci-run: deps
 # ── Renovate ────────────────────────────────────────────────────────────────
 
 # renovate: datasource=npm depName=renovate
-RENOVATE_VERSION := 43.214.0
+RENOVATE_VERSION := 43.214.1
 
 #renovate-validate: @ Validate Renovate configuration
 # Uses `npx` (not `pnpm dlx`) because renovate's published `engines.pnpm`
