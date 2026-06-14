@@ -21,6 +21,11 @@ RUN pnpm --filter @sos/sdk run compile && \
 FROM docker.io/node:24-alpine@sha256:2bdb65ed1dab192432bc31c95f94155ca5ad7fc1392fb7eb7526ab682fa5bf14 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+# Patch base-image system libs that lag the pinned digest (run as root before
+# dropping to `node`). A real upgrade, not a Trivy waiver; mirrors
+# app/backend-ts/Dockerfile so scaffolded services don't reintroduce a
+# fixable base-image CVE (e.g. libcrypto3/libssl3 CVE-2026-45447).
+RUN apk --no-cache upgrade && rm -rf /var/cache/apk/*
 COPY --from=build --chown=node:node /deploy ./
 USER node
 EXPOSE 3001
