@@ -23,7 +23,7 @@ node = "24"
 
 # Dapr CLI — pinned to keep compose sidecar / CLI lockstep with Azure infra
 # and with CI steps that `dapr run`.
-"aqua:dapr/cli" = "1.17.1"
+"aqua:dapr/cli" = "1.18.0"
 
 # Local GitHub Actions runner (for `make ci-run`).
 "aqua:nektos/act" = "0.2.89"
@@ -32,7 +32,7 @@ node = "24"
 "aqua:hadolint/hadolint" = "2.14.0"
 
 # Terraform — used by infra-validate and e2e-aca targets.
-terraform = "1.15.5"
+terraform = "1.15.6"
 
 # Terraform lint — used by infra-validate. Replaces inline `docker run
 # ghcr.io/terraform-linters/tflint:latest` (banned `:latest` + no Renovate
@@ -44,7 +44,7 @@ terraform = "1.15.5"
 
 # Filesystem CVE / secret / misconfig scanner — wired into `make trivy-fs`
 # (part of `make static-check`). Replaces ad-hoc Docker scans.
-"aqua:aquasecurity/trivy" = "0.71.0"
+"aqua:aquasecurity/trivy" = "0.71.1"
 
 # NOTE: do NOT set NODE_ENV here. Next.js `next build` sets NODE_ENV=production
 # internally; a project-level override leaks into the build and triggers the
