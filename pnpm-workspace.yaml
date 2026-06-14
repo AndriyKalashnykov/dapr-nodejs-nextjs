@@ -25,5 +25,11 @@ allowBuilds:
   sharp: true
 
 overrides:
+  # esbuild <0.28.1: GHSA-gv7w-rqvm-qjhr (HIGH, missing binary integrity
+  # verification) + GHSA-g7r4-m6w7-qqqr (LOW, arbitrary file read via dev
+  # server). Reached transitively via tsx>esbuild and vitest>vite>esbuild;
+  # both patched in 0.28.1. Drop once tsx/vitest bump their esbuild range
+  # past 0.28.1 organically (Renovate).
+  'esbuild@<0.28.1': '>=0.28.1'
   'postcss@<8.5.10': '>=8.5.10'
   'protobufjs@<8.0.2': '>=8.0.2'

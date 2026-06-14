@@ -24,6 +24,12 @@ RUN pnpm --filter @sos/sdk run compile && \
 FROM docker.io/node:24-alpine@sha256:2bdb65ed1dab192432bc31c95f94155ca5ad7fc1392fb7eb7526ab682fa5bf14 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
+# Patch base-image system libs that lag the pinned digest. node:24-alpine
+# ships libcrypto3/libssl3 3.5.6-r0 (CVE-2026-45447, HIGH); alpine v3.24/main
+# publishes the fixed 3.5.7-r0. Run as root before dropping to `node`. This
+# is a real upgrade (the CVE is gone from the image), not a Trivy waiver, and
+# becomes a near no-op once the upstream digest rebases onto patched alpine.
+RUN apk --no-cache upgrade && rm -rf /var/cache/apk/*
 # `node:*-alpine` ships with a non-root `node` user (UID 1000). Copy the
 # deploy artifact owned by that user, then drop privileges before CMD.
 COPY --from=build --chown=node:node /deploy ./
