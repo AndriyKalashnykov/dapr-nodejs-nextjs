@@ -2,7 +2,7 @@
 # Build
 FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS build
 ENV NODE_ENV=development
-RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+RUN corepack enable && corepack prepare pnpm@11.5.3 --activate
 WORKDIR /app
 COPY package.json .npmrc next.config.ts postcss.config.mjs tsconfig.json eslint.config.mjs ./
 # pnpm v11 reads the `allowBuilds` map ONLY from `pnpm-workspace.yaml`
@@ -21,7 +21,7 @@ COPY public ./
 
 # Run
 FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS runtime
-RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
+RUN corepack enable && corepack prepare pnpm@11.5.3 --activate
 WORKDIR /app
 COPY --from=build /app /app
 COPY /src /app/src
