@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 # Build context is the repo root.
-FROM docker.io/node:24-alpine@sha256:2bdb65ed1dab192432bc31c95f94155ca5ad7fc1392fb7eb7526ab682fa5bf14 AS build
+FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS build
 ENV NODE_ENV=production
 RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
 WORKDIR /workspace
@@ -16,7 +16,7 @@ RUN pnpm run build
 # corepack per-user activation trap — see PR #198). `vite preview` is the
 # scaffold default for a quick local prod-mode boot; replace with a
 # proper static server (nginx, caddy, serve) for production deployments.
-FROM docker.io/node:24-alpine@sha256:2bdb65ed1dab192432bc31c95f94155ca5ad7fc1392fb7eb7526ab682fa5bf14 AS runtime
+FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 # Patch base-image system libs that lag the pinned digest (run as root before
