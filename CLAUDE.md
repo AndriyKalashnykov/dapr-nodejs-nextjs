@@ -283,21 +283,23 @@ After any code or configuration change, review and update the project's `*.md` f
 
 ### Fast-track a transitive CVE without waiting for the parent ecosystem
 
-When `make vulncheck` (`pnpm audit --audit-level=moderate`) flags a CVE in a **transitive** dependency (the vulnerable package is pulled in by some other dep, not declared directly), the fastest fix is a `pnpm.overrides` entry in the root `package.json`. This forces every workspace's lockfile resolution to use the patched version, without waiting for the parent dep to bump its own range.
+When `make vulncheck` (`pnpm audit --audit-level=moderate`) flags a CVE in a **transitive** dependency (the vulnerable package is pulled in by some other dep, not declared directly), the fastest fix is an `overrides` entry in **`pnpm-workspace.yaml`**. This forces every workspace's lockfile resolution to use the patched version, without waiting for the parent dep to bump its own range.
 
-```jsonc
-// package.json
-{
-  "pnpm": {
-    "overrides": {
-      // semver-range key: any version matching the LHS resolves to the RHS
-      "protobufjs@<8.0.2": ">=8.0.2"
-    }
-  }
-}
+> **pnpm 11 moved overrides out of `package.json`.** The legacy
+> `"pnpm": { "overrides": { … } }` block in `package.json` is **silently
+> ignored** by pnpm 11 (`pnpm install` prints a one-line WARN and the
+> override never applies — `pnpm audit` still fails). The live home is the
+> `overrides:` map in `pnpm-workspace.yaml` (alongside `allowBuilds` and
+> `publicHoistPattern`). See the header comment in that file.
+
+```yaml
+# pnpm-workspace.yaml
+overrides:
+  # semver-range key: any version matching the LHS resolves to the RHS
+  'protobufjs@<8.0.2': '>=8.0.2'
 ```
 
-Then `pnpm install` regenerates the lockfile with the patched transitive. `pnpm audit` confirms the clearance.
+Then `pnpm install` regenerates the lockfile with the patched transitive. `pnpm audit` (i.e. `make vulncheck`) confirms the clearance.
 
 When to use:
 - **Use override** when the CVE is in a transitive (e.g., `protobufjs` reached via `@opentelemetry/exporter-metrics-otlp-proto → @opentelemetry/otlp-transformer`) and the parent hasn't shipped a bump yet, OR the parent's bump would be a major upgrade you're not ready for.
@@ -305,7 +307,7 @@ When to use:
 
 Drop the override after the next routine Renovate bump pulls in the patched version organically; otherwise it sticks around forever as dead config. Renovate's `replacements:all` preset (already in our `config:best-practices`) helps surface these.
 
-Real example: PR #198 (2026-05-13) added `protobufjs@<8.0.2` to clear three @opentelemetry/* CVEs at once; @opentelemetry's own bumps to 0.217.0 superseded the override on the same PR, so the override served only as a defense-in-depth pin against future regressions.
+Real examples: PR #198 (2026-05-13) added `protobufjs@<8.0.2` to clear three @opentelemetry/* CVEs at once; @opentelemetry's own bumps to 0.217.0 superseded the override on the same PR, so the override served only as a defense-in-depth pin against future regressions. PR #375 (2026-06-13) added `esbuild@<0.28.1` (GHSA-gv7w-rqvm-qjhr HIGH + GHSA-g7r4-m6w7-qqqr LOW, reached via `tsx>esbuild` and `vitest>vite>esbuild`) to `pnpm-workspace.yaml` — a reminder that the `package.json` form would have been silently ignored by pnpm 11.
 
 ### Main-branch rot detection
 
