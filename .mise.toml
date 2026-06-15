@@ -44,7 +44,7 @@ terraform = "1.15.6"
 
 # Filesystem CVE / secret / misconfig scanner — wired into `make trivy-fs`
 # (part of `make static-check`). Replaces ad-hoc Docker scans.
-"aqua:aquasecurity/trivy" = "0.71.0"
+"aqua:aquasecurity/trivy" = "0.71.1"
 
 # NOTE: do NOT set NODE_ENV here. Next.js `next build` sets NODE_ENV=production
 # internally; a project-level override leaks into the build and triggers the
