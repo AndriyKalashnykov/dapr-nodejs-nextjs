@@ -1,4 +1,4 @@
-name: cleanup-runs
+name: Cleanup old workflow runs
 
 on:
   schedule:
@@ -11,7 +11,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  actions: write
+  contents: read # cleanup-caches: gh api repos/.../branches (silently no-ops without it on private repos)
+  actions: write # gh run delete / gh cache delete
+  pull-requests: read # exclude open-PR head-SHA runs from deletion
 
 jobs:
   cleanup-runs:
@@ -25,10 +27,24 @@ jobs:
       - name: Delete old workflow runs
         run: |
           CUTOFF=$(date -u -d "${RETAIN_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
+          # Never delete a run carrying an OPEN PR's head-SHA — that run holds the
+          # PR's required `ci-pass` check; deleting it leaves the PR BLOCKED with
+          # 0 checks reported (silently un-mergeable).
+          OPEN_SHAS=$(gh pr list --repo "${{ github.repository }}" --state open \
+            --json headRefOid --jq '[.[].headRefOid]')
+          # Keep KEEP_MINIMUM newest runs PER WORKFLOW (group_by), not globally —
+          # a global slice can delete a low-frequency workflow's last run and
+          # deregister it from required-check resolution during quiet periods.
           gh run list --repo "${{ github.repository }}" \
-            --json databaseId,createdAt --limit 200 \
-          | jq -r --arg cutoff "$CUTOFF" --argjson keep "$KEEP_MINIMUM" \
-            'sort_by(.createdAt) | reverse | .[$keep:] | .[] | select(.createdAt < $cutoff) | .databaseId' \
+            --json databaseId,createdAt,workflowName,headSha --limit 200 \
+          | jq -r --arg cutoff "$CUTOFF" --argjson keep "$KEEP_MINIMUM" --argjson open "$OPEN_SHAS" \
+            'group_by(.workflowName)
+             | map(sort_by(.createdAt) | reverse | .[$keep:])
+             | add // []
+             | .[]
+             | select(.createdAt < $cutoff)
+             | select(.headSha as $s | ($open | index($s)) | not)
+             | .databaseId' \
           | xargs -r -I{} gh run delete {} --repo "${{ github.repository }}"
 
   cleanup-caches:

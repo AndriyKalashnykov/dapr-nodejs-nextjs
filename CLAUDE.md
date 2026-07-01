@@ -44,7 +44,7 @@ make vulncheck      # pnpm audit (fails on moderate+)
 make secrets        # gitleaks scan
 make trivy-fs       # Trivy filesystem CVE/secret/misconfig scan
 make deps-prune-check # Fail if any workspace has unused dependencies (depcheck)
-make static-check   # Composite gate — lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check
+make static-check   # Composite gate — check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check
 make test           # Unit tests across SDK + backend (with coverage)
 make ci             # Full CI pipeline locally (format-check + static-check + test + build)
 
@@ -205,14 +205,16 @@ Each backend feature follows a strict three-layer architecture:
 
 Each CI job delegates to a Makefile target. The `changes` detector (using `dorny/paths-filter`) gates heavy jobs so doc-only PRs skip the build/test matrix while still triggering the workflow (Repository Rulesets gating on `ci-pass` are satisfied either way). Job order:
 
-1. **changes**: detect whether the PR touches code (vs. docs/images only)
+1. **changes**: detect whether the PR touches code (vs. docs/images only). Emits `code` and `docs` outputs; `docs/diagrams/**/*.puml` is re-included into `code` so a diagram-source edit runs `diagrams-check`
 2. **build** (`make sdk-ci`): compile + lint + unit-test the SDK; upload `sdk-build` artifact
-3. **static-check** (`make static-check`, depends on changes): composite gate — `lint` + `mermaid-lint` + `diagrams-check` + `vulncheck` + `secrets` (gitleaks) + `trivy-fs` + `deps-prune-check`
+3. **static-check** (`make static-check`, depends on changes): composite gate — `check-toolchain-alignment` + `lint` + `mermaid-lint` + `diagrams-check` + `vulncheck` + `secrets` (gitleaks) + `trivy-fs` + `deps-prune-check`
 4. **test** (`make backend-test`, depends on build): backend unit tests with coverage
 5. **integration-test** (`make backend-test-integration`, depends on build): Postgres service + Dapr sidecar, real DB, real Dapr
 6. **web-nextjs** (`make web-nextjs-ci`, depends on changes): lint + Vitest + Next.js production build
-7. **e2e** (depends on integration-test + web-nextjs): docker compose build/up/test/down via `e2e/e2e-test.sh`
-8. **ci-pass**: aggregate gate — fails if any of the above failed or was cancelled
+7. **e2e** (depends on integration-test + web-nextjs): docker compose build/up/test/down via `e2e/e2e-test.sh`, then an OWASP ZAP baseline **DAST** scan (`make dast`) against the running stack
+8. **docker** (depends on changes + static-check + build + test): matrix (`backend-ts`, `web-nextjs`) — `make image-build-prod` → Trivy **image** scan → `make image-smoke-test` (amd64, no push)
+9. **mermaid-lint** (docs-only fast path): runs `make mermaid-lint` when a markdown-only change skips `static-check`, so README/CLAUDE Mermaid blocks stay validated
+10. **ci-pass**: aggregate gate — fails if any of the above failed or was cancelled
 
 ### Port allocation in CI / parallel runs
 
@@ -246,7 +248,7 @@ Always verify locally before committing and pushing. All Makefile targets must p
 ```bash
 make compile           # compile SDK + backend TypeScript
 make lint              # lint + typecheck + prettier + hadolint + scripts +x guard + dockerfile runtime-pnpm guard + terraform validate
-make static-check      # composite gate (lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check)
+make static-check      # composite gate (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check)
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (static-check + test + build)
 make ci-run            # run GitHub Actions workflow locally via act (skips e2e/mermaid-lint/secrets — see notes)
@@ -323,6 +325,8 @@ To trigger manually: `gh workflow run main-rot.yml`.
 
 Also, **GitHub Dependabot Alerts MUST stay enabled on this repo** (Settings → Security → Dependabot alerts). Renovate's `vulnerabilityAlerts` config block (with `automerge: true`, `minimumReleaseAge: "0 days"`) only fires when GitHub's Dependabot surfaces the CVE — if Alerts is disabled, Renovate has no trigger and CVEs sit unpatched indefinitely. Verify state via `gh api -X GET repos/AndriyKalashnykov/dapr-nodejs-nextjs/vulnerability-alerts` (204 = enabled).
 
+**`platformAutomerge` is intentionally `false` (do NOT flip it back to `true`).** `main` is gated by a Repository Ruleset requiring the `ci-pass` check. With GitHub-native platform automerge, Renovate arms the merge within ~1s and GitHub can complete it in the window *before* `ci-pass` registers as a pending check — so a red bump auto-merges and reddens `main` (the check-registration race). With `platformAutomerge: false` + `automerge: true`, Renovate merges via its own later run after re-confirming `ci-pass` is green. Prove any change here with a deliberately-red PR (it must NOT merge). Paired safety net: `check-toolchain-alignment` (first `static-check` gate) blocks a merge if a bump splits a mirrored version (Node/pnpm) across `.mise.toml` / `package.json` / Dockerfiles, and the `mise` manager now carries a 3-day `minimumReleaseAge` so grouped pnpm bumps land atomically.
+
 ## Adding a New Service
 
 See `docs/create-new-service.md` and use the scaffolds in `scaffolds/` directory. Each service needs: app container + Dapr sidecar container in its `docker-compose.yaml`.
@@ -340,9 +344,12 @@ Items genuinely waiting on upstream or scheduled for future revisit. Resolved it
 
 - [ ] **Dapr Dashboard** — v0.15.0 (Sep 2024) is the latest stable; no action until a newer version is published.
 - [ ] **pg (node-postgres) bus-factor watch** — solo-maintained by Brian Carlson with 500+ open issues; sponsorship (Medplum, Timescale, GitHub) and `charmander` as de-facto co-committer keep it healthy. `postgres.js` is the credible #2 driver if succession stalls. Next quarterly check ~2026-08.
-- [ ] **Drop Knex for Kysely** — researched + planned, deferred. Phased plan in [`docs/migration-knex-to-kysely.md`](docs/migration-knex-to-kysely.md): Kysely on top of `pg` (driver swap to `postgres.js` optional Phase 6). ~14h effort core, ~18h with driver swap. Only `models/todo.ts` + `services/todo.ts` are Knex consumers.
 - [ ] **Next.js prerender regression watch** — upstream [vercel/next.js#87719](https://github.com/vercel/next.js/issues/87719) still open. `.mise.toml` carries a defensive comment to never set `NODE_ENV` (otherwise `next build`'s internal `NODE_ENV=production` is overridden and `/_global-error` / `/_not-found` crash at prerender). Watch for regressions in future Next.js minors.
 - [ ] **act-skip parity watch** — `make mermaid-lint`, `make secrets`, and the `download-artifact` step in `ci.yml` short-circuit when `$ACT == 'true'` to work around DinD bind-mount, gitleaks-allowlist, and local-artifact-server limitations. All guards are no-ops on real GitHub runners. Watch for parity drift if real CI starts failing where act passes.
+
+## Roadmap (discretionary — not upstream-blocked)
+
+- **Drop Knex for Kysely** — researched + planned, deferred (a discretionary refactor, not waiting on upstream). Phased plan in [`docs/migration-knex-to-kysely.md`](docs/migration-knex-to-kysely.md): Kysely on top of `pg` (driver swap to `postgres.js` optional Phase 6). ~14h effort core, ~18h with driver swap. Only `models/todo.ts` + `services/todo.ts` are Knex consumers.
 
 ## Skills
 

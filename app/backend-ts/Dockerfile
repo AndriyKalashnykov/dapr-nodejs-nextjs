@@ -2,7 +2,7 @@
 # Build context is the repo root (see Makefile e2e-aca target).
 FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS build
 ENV NODE_ENV=production
-RUN corepack enable && corepack prepare pnpm@11.6.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.json ./
 COPY packages ./packages
@@ -15,7 +15,7 @@ RUN pnpm --filter @sos/sdk run compile && \
 # Runtime — no pnpm/corepack at runtime. Invoke tsx directly via node.
 #
 # Why: when CMD was `pnpm run start`, the `node` user's corepack had no
-# activation cache (the build-stage `corepack prepare pnpm@11.6.0 --activate`
+# activation cache (the build-stage `corepack prepare pnpm@11.7.0 --activate`
 # runs as root and is per-user). At container start, corepack as `node`
 # fell back to the base image's default pnpm (11.0.9), downloaded it, and
 # pnpm 11's `depsStatusCheck` then tried to write a tmp file to /app which

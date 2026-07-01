@@ -21,7 +21,7 @@ The hero diagram is intentionally Context-level (one box): "what is this and who
 | Backend framework  | Express 5 + `express-zod-api`                                                                                                        |
 | Frontend framework | Next.js 16 (App Router, SSR)                                                                                                         |
 | Database           | PostgreSQL 18 + Knex.js migrations                                                                                                   |
-| Dapr runtime       | Dapr 1.17.6 runtime, CLI 1.17.1 (placement + scheduler + sidecar per service)                                                        |
+| Dapr runtime       | Dapr 1.18.0 runtime + CLI (placement + scheduler + sidecar per service)                                                              |
 | State / pub/sub    | Redis 8                                                                                                                              |
 | Auth               | JWT via `jsonwebtoken` (dev secret in `.env`)                                                                                        |
 | Observability      | OpenTelemetry SDK → Zipkin + Grafana OTEL stack                                                                                      |
@@ -186,7 +186,7 @@ make up             # Bring up the full stack (Ctrl-C to stop)
 #   unit (seconds, no containers)
 make test              # Vitest unit tests — SDK + backend + web-nextjs
 make lint              # Lint + typecheck across all workspaces
-make static-check      # Composite quality gate (lint + mermaid-lint + vulncheck + secrets + trivy-fs + deps-prune-check)
+make static-check      # Composite quality gate (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check)
 make ci                # Full local CI (format-check + static-check + test + build)
 
 #   integration (tens of seconds, needs Postgres + Dapr sidecar)
@@ -212,6 +212,8 @@ Once running, services are available at:
 | Dapr Dashboard         | http://localhost:8888                                            |
 | Zipkin tracing         | http://localhost:9411                                            |
 | PostgreSQL             | localhost:5432 (user/pass: `postgres`)                           |
+| Redis                  | localhost:6379                                                   |
+| Grafana OTEL (if enabled) | http://localhost:3200                                         |
 
 ### Environment configuration
 
@@ -231,7 +233,7 @@ make e2e-aca   # terraform apply → deploy → smoke → terraform destroy
 
 The matching workflow (`.github/workflows/e2e-aca.yml`) runs on `workflow_dispatch` only (Actions → "E2E (ACA)" → Run workflow). It is not triggered on push/PR because each run incurs Azure cost (low single-digit USD per cycle — see [docs/deploy-aca.md](./docs/deploy-aca.md) for the breakdown) and serializes on Terraform state.
 
-<img src="docs/diagrams/out/c4-deployment.png" alt="C4 Deployment View — an Azure Resource Group holds a Virtual Network containing the ACA Managed Environment (web-nextjs + backend-ts with Dapr sidecars), a PrivateEndpoints subnet (Azure Cache for Redis), and a Postgres delegated subnet (Postgres Flexible Server), plus Key Vault, Container Registry, and Application Insights; managed identities broker secretstore, image pull, and OTLP" width="900">
+<img src="docs/diagrams/out/c4-deployment.png" alt="C4 Deployment View — an Azure Resource Group holds a Virtual Network containing the ACA Managed Environment (web-nextjs + backend-ts with Dapr sidecars), a PrivateEndpoints subnet (Azure Cache for Redis), and a Postgres delegated subnet (Postgres Flexible Server), plus Key Vault, Container Registry, and Application Insights; managed identities broker secretstore, image pull, and OTLP" width="550">
 
 - **Ingress**: both container apps have `external_enabled = true` → public HTTPS endpoints auto-issued by ACA
 - **Secrets**: each app has a user-assigned managed identity with `Key Vault Secrets User` role on the KV. Dapr's `azure-keyvault-secretstore` component uses that MI at runtime — no client secrets in app config
@@ -288,7 +290,7 @@ Run `make help` to see all targets.
 | `make secrets`                     | Scan repo for committed secrets via `gitleaks`                                                              |
 | `make trivy-fs`                    | Trivy filesystem scan — CVEs + secrets + Dockerfile misconfigs (CRITICAL,HIGH)                              |
 | `make mermaid-lint`                | Validate every ` ```mermaid ` block in markdown via pinned `minlag/mermaid-cli`                             |
-| `make static-check`                | Composite quality gate: `lint` + `mermaid-lint` + `vulncheck` + `secrets` + `trivy-fs` + `deps-prune-check` |
+| `make static-check`                | Composite quality gate: `check-toolchain-alignment` + `lint` + `mermaid-lint` + `diagrams-check` + `vulncheck` + `secrets` + `trivy-fs` + `deps-prune-check` |
 | `make deps-prune-check`            | Fail if any workspace has unused dependencies (CI gate via `depcheck`)                                      |
 
 ### Testing (three-layer pyramid)
@@ -390,17 +392,18 @@ GitHub Actions runs on every push to `main`, tags `v*`, and pull requests.
 | -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | **changes**          | push, PR, tags                      | Detect code changes (skips heavy jobs on docs-only PRs via [`dorny/paths-filter`](https://github.com/dorny/paths-filter)) |
 | **build**            | after changes                       | Compile SDK, lint & test SDK, upload `sdk-build` artifact                                                                 |
-| **static-check**     | after changes                       | Composite gate: `make static-check` (lint + mermaid-lint + vulncheck + gitleaks + Trivy fs scan + deps-prune-check)       |
+| **static-check**     | after changes                       | Composite gate: `make static-check` (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + gitleaks + Trivy fs scan + deps-prune-check) |
 | **test**             | after build                         | Unit tests across SDK + backend (with coverage)                                                                           |
 | **integration-test** | after build                         | Backend integration tests with Postgres service + Dapr sidecar                                                            |
 | **web-nextjs**       | after changes                       | Lint, test & build Next.js SSR frontend                                                                                   |
 | **e2e**              | after integration-test + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`) + OWASP ZAP baseline DAST                                               |
 | **docker**           | after static-check + build + test   | Matrix (backend-ts, web-nextjs): amd64 build → Trivy image scan → smoke test (no push)                                    |
+| **mermaid-lint**     | docs-only changes                   | Runs `make mermaid-lint` when a markdown-only change skips `static-check` (validates README/CLAUDE Mermaid blocks)        |
 | **ci-pass**          | after all above                     | Gate job — fails if any required job failed or was cancelled                                                              |
 
 The `changes` detector keeps doc-only changes from running heavy jobs while still triggering the workflow (so Repository Rulesets gating on `ci-pass` are satisfied).
 
-[Renovate](https://docs.renovatebot.com/) keeps dependencies up to date with platform automerge enabled.
+[Renovate](https://docs.renovatebot.com/) keeps dependencies up to date, merging on green CI (Renovate re-confirms the required `ci-pass` check before merging, rather than GitHub-native platform automerge — avoids the check-registration race on the Ruleset-gated `main`).
 
 ### Required secrets and variables
 
@@ -419,12 +422,16 @@ Set secrets via **Settings → Secrets and variables → Actions → New reposit
 
 `make static-check` (run by the `static-check` CI job on every push and PR) bundles:
 
-| Gate        | Catches                                                                                           | Tool                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `lint`      | Code style, type errors, Dockerfile lints, `scripts/*.sh` missing +x bit, broken Mermaid diagrams | ESLint, `tsc --noEmit`, Prettier, hadolint, `mermaid-cli`                     |
-| `vulncheck` | Known npm CVEs (moderate+)                                                                        | `pnpm audit`                                                                  |
-| `secrets`   | Committed credentials                                                                             | [gitleaks](https://github.com/gitleaks/gitleaks) — config in `.gitleaks.toml` |
-| `trivy-fs`  | Filesystem CVEs, secrets, Dockerfile misconfigs (CRITICAL,HIGH)                                   | [Trivy](https://github.com/aquasecurity/trivy) — allowlist in `.trivyignore`  |
+| Gate                        | Catches                                                                           | Tool                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `check-toolchain-alignment` | Node major / pnpm version drift across `.mise.toml`, `package.json`, Dockerfiles  | `grep` comparison (fast-fail, runs first)                                     |
+| `lint`                      | Code style, type errors, Dockerfile lints, `scripts/*.sh` missing +x bit          | ESLint, `tsc --noEmit`, Prettier, hadolint                                    |
+| `mermaid-lint`              | Broken ` ```mermaid ` blocks in markdown                                          | pinned `minlag/mermaid-cli`                                                   |
+| `diagrams-check`            | Committed C4 PNGs out of sync with their `docs/diagrams/*.puml` source            | pinned `plantuml/plantuml` + `git diff --exit-code`                           |
+| `vulncheck`                 | Known npm CVEs (moderate+)                                                         | `pnpm audit`                                                                  |
+| `secrets`                   | Committed credentials                                                             | [gitleaks](https://github.com/gitleaks/gitleaks) — config in `.gitleaks.toml` |
+| `trivy-fs`                  | Filesystem CVEs, secrets, Dockerfile misconfigs (CRITICAL,HIGH)                   | [Trivy](https://github.com/aquasecurity/trivy) — allowlist in `.trivyignore`  |
+| `deps-prune-check`          | Unused dependencies in any workspace                                             | `depcheck`                                                                    |
 
 ### Pre-push image hardening
 

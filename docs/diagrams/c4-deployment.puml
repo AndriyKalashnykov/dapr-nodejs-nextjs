@@ -21,8 +21,8 @@ title Deployment View — Azure Container Apps
 Deployment_Node(rg, "Azure Resource Group", "azurerm_resource_group") {
   Deployment_Node(vnet, "Virtual Network", "azurerm_virtual_network") {
     Deployment_Node(aca_env, "ACA Managed Environment", "Container Apps + built-in Dapr placement + scheduler") {
-      Container(nextjs_aca, "web-nextjs", "Next.js 16, Node.js 24, Dapr 1.17.6 sidecar", "External ingress :3000")
-      Container(backend_aca, "backend-ts", "Express 5, Node.js 24, Dapr 1.17.6 sidecar", "External ingress :3001")
+      Container(nextjs_aca, "web-nextjs", "Next.js 16, Node.js 24, Dapr 1.18.0 sidecar", "External ingress :3000")
+      Container(backend_aca, "backend-ts", "Express 5, Node.js 24, Dapr 1.18.0 sidecar", "External ingress :3001")
     }
     Deployment_Node(pe_subnet, "PrivateEndpoints subnet") {
       ContainerDb(redis_aca, "Azure Cache for Redis", "Standard tier, TLS 1.2", "State + pub/sub")

@@ -28,9 +28,9 @@ Person(user, "End user", "Browser")
 
 System_Boundary(sys, "Dapr microservices") {
   Container(nextjs, "web-nextjs", "Next.js 16, Node.js 24", "SSR frontend, REST proxy via Dapr invoker")
-  Container(nextjs_dapr, "Dapr sidecar (web-nextjs)", "Dapr 1.17.6", "State + pub/sub + service invocation")
+  Container(nextjs_dapr, "Dapr sidecar (web-nextjs)", "Dapr 1.18.0", "State + pub/sub + service invocation")
   Container(backend, "backend-ts", "Express 5, Node.js 24", "REST API with express-zod-api, layered handler/service/model")
-  Container(backend_dapr, "Dapr sidecar (backend-ts)", "Dapr 1.17.6", "State + pub/sub + service invocation")
+  Container(backend_dapr, "Dapr sidecar (backend-ts)", "Dapr 1.18.0", "State + pub/sub + service invocation")
   ContainerDb(postgres, "Postgres", "PostgreSQL 18", "Primary datastore (Knex migrations, soft delete)")
   ContainerDb(redis, "Redis", "Redis 8", "State store + pub/sub broker (todo-data topic)")
 }
