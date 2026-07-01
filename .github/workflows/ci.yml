@@ -202,6 +202,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Redis backs the redis-state + redis-pubsub Dapr components so the
+      # cache/pub-sub integration tests actually execute (they skip-guard to
+      # green without a reachable Redis-backed component).
+      redis:
+        image: redis:8-alpine@sha256:09160599abd229764c0fb44cb6be640294e1d360a54b19985ab4843dcf2d90f1
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -237,6 +249,8 @@ jobs:
 
       - name: Bring up Dapr sidecar
         run: make ci-dapr-up
+        env:
+          REDIS_HOST: localhost:6379
 
       - name: Prepare test schema
         run: make ci-db-prepare
@@ -290,7 +304,7 @@ jobs:
     needs: [changes, integration-test, web-nextjs]
     if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -338,6 +352,17 @@ jobs:
 
       - name: Run end-to-end tests
         run: bash e2e/e2e-test.sh
+
+      # Next.js route → real Dapr → real backend → real Postgres, against the
+      # running compose stack (skip-guards to green if the stack isn't up —
+      # e2e-test.sh above has already confirmed readiness, so it executes here).
+      - name: web-nextjs integration (full chain)
+        run: make web-nextjs-integration
+
+      # Playwright browser e2e against the running stack (SSR DOM round-trip).
+      # Wired here so it can't silently rot outside CI.
+      - name: Playwright browser e2e
+        run: make e2e-browser
 
       # DAST gate (OWASP ZAP baseline) — runs against the same compose stack
       # rather than a separate runner image. ZAP version is pinned in the
