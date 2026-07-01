@@ -1,0 +1,50 @@
+@startuml c4-container
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/v2.11.0/C4_Container.puml
+
+' Landscape layout: C4-PlantUML defaults to top-down, which stacks this multi-service
+' view into a tall portrait tower. Left-to-right renders wider and shorter — embeds
+' better on a wide README and keeps the rendered height reasonable at the capped width.
+LAYOUT_LEFT_RIGHT()
+
+' Modern flat styling: no shadows, sharper corners, clean sans-serif, modern palette.
+skinparam backgroundColor #FAFAFA
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam defaultFontName "Inter, Helvetica, Arial, sans-serif"
+skinparam defaultFontSize 13
+skinparam ArrowColor #37474F
+skinparam ArrowThickness 1.2
+skinparam rectangleBorderThickness 1.3
+
+UpdateElementStyle("person",          $fontColor="#FFFFFF", $bgColor="#0F766E", $borderColor="#134E4A")
+UpdateElementStyle("container",       $fontColor="#FFFFFF", $bgColor="#2563EB", $borderColor="#1E3A8A")
+UpdateElementStyle("container_db",    $fontColor="#FFFFFF", $bgColor="#7C3AED", $borderColor="#4C1D95")
+UpdateElementStyle("external_system", $fontColor="#FFFFFF", $bgColor="#64748B", $borderColor="#475569")
+UpdateBoundaryStyle($bgColor="#F1F5F9", $borderColor="#94A3B8", $fontColor="#1E293B")
+
+title Container View — Dapr microservices stack
+
+Person(user, "End user", "Browser")
+
+System_Boundary(sys, "Dapr microservices") {
+  Container(nextjs, "web-nextjs", "Next.js 16, Node.js 24", "SSR frontend, REST proxy via Dapr invoker")
+  Container(nextjs_dapr, "Dapr sidecar (web-nextjs)", "Dapr 1.17.6", "State + pub/sub + service invocation")
+  Container(backend, "backend-ts", "Express 5, Node.js 24", "REST API with express-zod-api, layered handler/service/model")
+  Container(backend_dapr, "Dapr sidecar (backend-ts)", "Dapr 1.17.6", "State + pub/sub + service invocation")
+  ContainerDb(postgres, "Postgres", "PostgreSQL 18", "Primary datastore (Knex migrations, soft delete)")
+  ContainerDb(redis, "Redis", "Redis 8", "State store + pub/sub broker (todo-data topic)")
+}
+
+System_Ext(zipkin, "Zipkin", "Distributed tracing UI (W3C traceparent)")
+
+Rel(user, nextjs, "HTTPS / HTML", "browser → SSR")
+Rel(nextjs, nextjs_dapr, "DaprClient.invoker.invoke()", "HTTP")
+Rel(nextjs_dapr, backend_dapr, "v1.0/invoke/backend-ts/method/...", "HTTP")
+Rel(backend_dapr, backend, "Routes invoke + consumer", "HTTP")
+Rel(backend, postgres, "Read/write todos", "TCP/pgwire (knex)")
+Rel(backend_dapr, redis, "State + pub/sub", "TCP")
+Rel(nextjs, zipkin, "Spans", "OTLP/HTTP")
+Rel(backend, zipkin, "Spans", "OTLP/HTTP")
+
+SHOW_LEGEND()
+@enduml
