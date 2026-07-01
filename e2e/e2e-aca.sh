@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # End-to-end smoke test against a live Azure Container Apps deployment.
 #
-# Reads the Next.js and backend FQDNs from `terraform output -raw`, runs the
-# same CRUD + auth + cross-service assertions as e2e/e2e-test.sh but without
-# the local-only probes (no Zipkin, Dashboard, Grafana — those are compose).
+# Reads the Next.js/backend FQDNs + resource group from `terraform output -raw`,
+# runs CRUD + auth + envelope + PUT/PATCH assertions AND a pub/sub-delivery
+# witness that exercises the PROD-real paths compose e2e can't (Azure Cache for
+# Redis over TLS + consumerID, Key Vault secretstore). The pub/sub witness reads
+# the app's console log via `az containerapp logs` and is best-effort (WARN, not
+# FAIL) since ACA log surfacing can lag. Local-only probes (Zipkin, Dashboard,
+# Grafana) are intentionally omitted — those live in e2e/e2e-test.sh (compose).
 #
 # Expected env:
 #   TF_DIR — path to infra/azure (default ./infra/azure)
@@ -39,14 +43,16 @@ if [[ -z "$NEXTJS_URL" || -z "$BACKEND_URL" ]]; then
   exit 2
 fi
 
-PASS=0; FAIL=0; FAILURES=()
+PASS=0; FAIL=0; WARN=0; FAILURES=(); WARNINGS=()
 
 record() {
-  if [[ "$1" == "PASS" ]]; then
-    echo "  ✓ $2"; PASS=$((PASS + 1))
-  else
-    echo "  ✗ $2"; FAIL=$((FAIL + 1)); FAILURES+=("$2")
-  fi
+  case "$1" in
+    PASS) echo "  ✓ $2"; PASS=$((PASS + 1)) ;;
+    # Non-blocking: ACA console-log surfacing can lag, so the pub/sub-delivery
+    # witness is best-effort — a miss is recorded but does not fail the run.
+    WARN) echo "  ! $2"; WARN=$((WARN + 1)); WARNINGS+=("$2") ;;
+    *)    echo "  ✗ $2"; FAIL=$((FAIL + 1)); FAILURES+=("$2") ;;
+  esac
 }
 
 assert_http() {
@@ -106,7 +112,16 @@ assert_http "Nonexistent todo → 404" \
   404 GET "" "$TOKEN"
 echo
 
-echo "[4/4] Backend CRUD cycle..."
+echo "[4/5] Backend CRUD cycle (create exercises the PROD-real paths compose can't)..."
+# A successful create on ACA implicitly validates three prod-only paths:
+#   • Key Vault secretstore — JWT_SECRET_KEY is fetched from Key Vault at boot,
+#     so any authed request proves the secretstore wiring.
+#   • Azure Cache for Redis (TLS) STATE — the read-through cache saves the todo
+#     to the Redis state store over TLS.
+#   • Azure Cache for Redis (TLS) PUB/SUB — the write publishes to `todo-data`
+#     over TLS with the configured consumerID.
+# The explicit envelope + PUT/PATCH + pub/sub-delivery checks below make those
+# implicit validations observable.
 assert_http "List todos" \
   "$BACKEND_URL/api/v1/todos" 200 GET "" "$TOKEN"
 
@@ -117,6 +132,18 @@ CREATE_RESP=$(curl -sf -X POST \
   "$BACKEND_URL/api/v1/todos" 2>/dev/null || echo '')
 if echo "$CREATE_RESP" | grep -q '"id"'; then
   record PASS "Create todo on ACA returns id"
+  # Envelope shape (mirrors the compose e2e) — proves the standard API response
+  # contract holds against the deployed app, not just a 2xx status.
+  if echo "$CREATE_RESP" | grep -q '"apiVersion"'; then
+    record PASS "Create response has apiVersion envelope"
+  else
+    record FAIL "Create response missing apiVersion envelope: ${CREATE_RESP:0:120}"
+  fi
+  if echo "$CREATE_RESP" | grep -q '"completed":false'; then
+    record PASS "Create response has completed=false"
+  else
+    record FAIL "Create response missing completed=false: ${CREATE_RESP:0:120}"
+  fi
   TODO_ID=$(echo "$CREATE_RESP" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{console.log(JSON.parse(d).data.id)}catch{console.log('')}})")
 else
   record FAIL "Create todo on ACA — no id: ${CREATE_RESP:0:160}"
@@ -126,12 +153,58 @@ fi
 if [[ -n "$TODO_ID" ]]; then
   assert_http "Get todo by id" \
     "$BACKEND_URL/api/v1/todos/${TODO_ID}" 200 GET "" "$TOKEN"
+  # PUT + PATCH are both registered for updateTodoById; a regression dropping
+  # one would otherwise be silent (mirrors the compose e2e update coverage).
+  assert_http "Update todo via PUT" \
+    "$BACKEND_URL/api/v1/todos/${TODO_ID}" 200 PUT \
+    '{"title":"e2e-aca-todo-updated","completed":true}' "$TOKEN"
+  assert_http "Update todo via PATCH" \
+    "$BACKEND_URL/api/v1/todos/${TODO_ID}" 200 PATCH \
+    '{"title":"e2e-aca-todo-patched"}' "$TOKEN"
+fi
+echo
+
+echo "[5/5] Pub/sub delivery witness (Azure Cache for Redis over TLS + consumerID)..."
+# The create above published to `todo-data` THROUGH the app's Dapr sidecar over
+# Azure Cache for Redis (TLS). Witnessing the consumer handling it proves the
+# full publish→Redis(TLS)→subscription→/consumer round trip on real Azure — the
+# path the compose e2e (plain Redis, no TLS) cannot cover. Best-effort (WARN):
+# ACA console-log surfacing can lag, and the exact `az containerapp logs` shape
+# may need tuning per deployment — a miss does NOT fail the release (the create
+# publish itself already succeeded above).
+RG=$(read_tf resource_group_name)
+if [[ -n "$RG" && -n "${TODO_ID:-}" ]] && command -v az >/dev/null 2>&1; then
+  witness=""
+  for _ in $(seq 1 24); do # up to ~120s for the console log to surface
+    if az containerapp logs show \
+         --name "$BACKEND_APP_ID" --resource-group "$RG" \
+         --type console --tail 200 2>/dev/null \
+         | grep -q 'Consumer handling message'; then
+      witness=yes; break
+    fi
+    sleep 5
+  done
+  if [[ "$witness" == "yes" ]]; then
+    record PASS "Pub/sub round-trip witnessed on ACA (Redis-TLS publish → consumer)"
+  else
+    record WARN "Pub/sub consumer log not observed within 120s (ingestion lag or az-log shape) — the create-todo publish itself succeeded"
+  fi
+else
+  record WARN "Skipped pub/sub witness (no resource_group_name output or az CLI unavailable)"
+fi
+
+# Clean up the probe todo (delete also publishes a delete event).
+if [[ -n "${TODO_ID:-}" ]]; then
   assert_http "Delete todo" \
     "$BACKEND_URL/api/v1/todos/${TODO_ID}" 200 DELETE "" "$TOKEN"
 fi
 echo
 
-echo "=== Results: ${PASS} passed, ${FAIL} failed ==="
+echo "=== Results: ${PASS} passed, ${WARN} warnings, ${FAIL} failed ==="
+if (( WARN > 0 )); then
+  echo "Warnings (non-blocking):"
+  for w in "${WARNINGS[@]}"; do echo "  - $w"; done
+fi
 if (( FAIL > 0 )); then
   echo "Failures:"
   for f in "${FAILURES[@]}"; do echo "  - $f"; done

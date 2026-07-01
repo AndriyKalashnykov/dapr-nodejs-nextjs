@@ -33,6 +33,19 @@ test.describe("Next.js SSR frontend", () => {
     expect(resp?.status()).toBeLessThan(500);
   });
 
+  test("unauthenticated /todos redirects to the home page", async ({
+    page,
+    context,
+  }) => {
+    // No /api/auth call → no session cookie. verifySession() (lib/session.ts)
+    // redirects to "/" when the session is invalid/missing — the server-side
+    // redirect lands the browser back on the home page, NOT a 500 or a leaked
+    // todos view. Guards the auth gate on the protected SSR route.
+    await context.clearCookies();
+    await page.goto("/todos");
+    expect(new URL(page.url()).pathname).toBe("/");
+  });
+
   // Full round-trip: seed a uniquely-titled todo via the backend's direct
   // HTTP, then load the SSR /todos page. The page renders by calling
   // `getAll()` which goes Next.js → Dapr invoker → Dapr sidecar →
