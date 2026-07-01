@@ -33,6 +33,46 @@ test.describe("Next.js SSR frontend", () => {
     expect(resp?.status()).toBeLessThan(500);
   });
 
+  test("unauthenticated /todos does not expose todo data", async ({
+    page,
+    context,
+    request,
+  }) => {
+    // Seed a uniquely-titled todo (authed, direct backend) so there IS data to
+    // leak, then load /todos WITHOUT a session cookie. `getAll()` gates on
+    // verifySession(), so the SSR page cannot fetch todos unauthenticated — it
+    // renders gracefully (no 5xx) but the seeded title must NOT appear.
+    // (Note: verifySession() calls redirect("/"), but on the page that throw is
+    // swallowed by React-Query's prefetchQuery, so the URL stays /todos and the
+    // real guarantee is "no data", not "redirect" — verified against CI.)
+    const uniqueTitle = `e2e-unauth-${Date.now()}`;
+    const token = backendToken();
+    const create = await request.post(`${BACKEND_BASE}/api/v1/todos`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      data: { title: uniqueTitle },
+    });
+    expect(create.status(), "seed POST returned non-2xx").toBe(200);
+    const { data: seeded } = await create.json();
+    try {
+      await context.clearCookies();
+      const resp = await page.goto("/todos");
+      expect(
+        resp?.status(),
+        `unauth /todos returned ${resp?.status()}`,
+      ).toBeLessThan(500);
+      await expect(page.getByText(uniqueTitle)).toHaveCount(0);
+    } finally {
+      await request
+        .delete(`${BACKEND_BASE}/api/v1/todos/${seeded.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        .catch(() => undefined);
+    }
+  });
+
   // Full round-trip: seed a uniquely-titled todo via the backend's direct
   // HTTP, then load the SSR /todos page. The page renders by calling
   // `getAll()` which goes Next.js → Dapr invoker → Dapr sidecar →

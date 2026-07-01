@@ -96,6 +96,12 @@
       "groupName": "Dapr SDK"
     },
     {
+      "description": "Belt-and-suspenders: guarantee the mise-managed `aqua:dapr/cli` pin joins the Dapr SDK group. mise tools can resolve to a packageName that differs from the tool name (skill rule: match mise tools by matchDepNames, not matchPackageNames), so the matchPackageNames above may miss it; matchDepNames on the mise manager catches it regardless. Redundant-but-harmless if the packageName already matched.",
+      "matchManagers": ["mise"],
+      "matchDepNames": ["dapr/cli"],
+      "groupName": "Dapr SDK"
+    },
+    {
       "description": "Group OpenTelemetry packages",
       "matchPackageNames": ["/^@opentelemetry\\//"],
       "groupName": "OpenTelemetry"
