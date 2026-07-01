@@ -23,6 +23,13 @@ RUN pnpm --filter @sos/sdk run compile && \
 # Mirrors the web-nextjs runtime (also pnpm-free).
 FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS runtime
 ENV NODE_ENV=production
+# APP_INTERNAL_PORT externalizes the EXPOSE below (documentation of the Dapr
+# app-port). No HEALTHCHECK: this backend listens on a Unix socket
+# (/tmp/express-*.sock) and is fronted by its Dapr sidecar — nothing binds TCP
+# on this port standalone, so a TCP/HTTP probe would mark the container
+# unhealthy forever. Liveness is covered by the smoke test + the sidecar.
+ARG APP_INTERNAL_PORT=3001
+ENV APP_INTERNAL_PORT=${APP_INTERNAL_PORT}
 WORKDIR /app
 # Patch base-image system libs that lag the pinned digest. node:24-alpine
 # ships libcrypto3/libssl3 3.5.6-r0 (CVE-2026-45447, HIGH); alpine v3.24/main
@@ -39,6 +46,11 @@ WORKDIR /app
 # override cannot reach it — removing npm eliminates the finding at the source
 # (attack-surface reduction, not a Trivy waiver). Re-evaluate once the base
 # image ships an npm whose bundled undici is >= 6.27.0.
+# Cache-bust so the apk upgrade re-executes even when the layer is gha-cached
+# (CI passes APK_UPGRADE_DATE=${{ github.run_id }} for per-run freshness; the
+# Makefile passes a daily date). Without this a mid-week apk CVE fix is served
+# stale from the cached layer. A changed in-scope ARG busts the FOLLOWING RUN.
+ARG APK_UPGRADE_DATE=manual
 RUN apk --no-cache upgrade && rm -rf /var/cache/apk/* \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
               /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
@@ -46,5 +58,5 @@ RUN apk --no-cache upgrade && rm -rf /var/cache/apk/* \
 # deploy artifact owned by that user, then drop privileges before CMD.
 COPY --from=build --chown=node:node /deploy ./
 USER node
-EXPOSE 3001
+EXPOSE ${APP_INTERNAL_PORT}
 CMD ["./node_modules/.bin/tsx", "--import", "./src/lib/instrumentation.ts", "src/main.ts"]

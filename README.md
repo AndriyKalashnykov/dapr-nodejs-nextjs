@@ -186,7 +186,8 @@ make up             # Bring up the full stack (Ctrl-C to stop)
 #   unit (seconds, no containers)
 make test              # Vitest unit tests — SDK + backend + web-nextjs
 make lint              # Lint + typecheck across all workspaces
-make static-check      # Composite quality gate (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check)
+make static-check      # PR-path gate (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + secrets + deps-prune-check)
+make cve-check         # CVE scans (pnpm audit + Trivy fs) — tag-gated in CI + daily on main
 make ci                # Full local CI (format-check + static-check + test + build)
 
 #   integration (tens of seconds, needs Postgres + Dapr sidecar)
@@ -290,7 +291,9 @@ Run `make help` to see all targets.
 | `make secrets`                     | Scan repo for committed secrets via `gitleaks`                                                              |
 | `make trivy-fs`                    | Trivy filesystem scan — CVEs + secrets + Dockerfile misconfigs (CRITICAL,HIGH)                              |
 | `make mermaid-lint`                | Validate every ` ```mermaid ` block in markdown via pinned `minlag/mermaid-cli`                             |
-| `make static-check`                | Composite quality gate: `check-toolchain-alignment` + `lint` + `mermaid-lint` + `diagrams-check` + `vulncheck` + `secrets` + `trivy-fs` + `deps-prune-check` |
+| `make static-check`                | PR-path quality gate: `check-toolchain-alignment` + `lint` + `mermaid-lint` + `diagrams-check` + `secrets` + `deps-prune-check` |
+| `make cve-check`                   | CVE scans: `vulncheck` (`pnpm audit`) + `trivy-fs` — tag-gated in CI + daily on `main` |
+| `make image-test`                  | container-structure-test: assert a built image's Dockerfile contract (USER, port, entrypoint) |
 | `make deps-prune-check`            | Fail if any workspace has unused dependencies (CI gate via `depcheck`)                                      |
 
 ### Testing (three-layer pyramid)
@@ -392,12 +395,13 @@ GitHub Actions runs on every push to `main`, tags `v*`, and pull requests.
 | -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | **changes**          | push, PR, tags                      | Detect code changes (skips heavy jobs on docs-only PRs via [`dorny/paths-filter`](https://github.com/dorny/paths-filter)) |
 | **build**            | after changes                       | Compile SDK, lint & test SDK, upload `sdk-build` artifact                                                                 |
-| **static-check**     | after changes                       | Composite gate: `make static-check` (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + gitleaks + Trivy fs scan + deps-prune-check) |
+| **static-check**     | after changes                       | PR-path gate: `make static-check` (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + gitleaks + deps-prune-check — **no** CVE scan) |
 | **test**             | after build                         | Unit tests across SDK + backend (with coverage)                                                                           |
 | **integration-test** | after build                         | Backend integration tests with Postgres service + Dapr sidecar                                                            |
 | **web-nextjs**       | after changes                       | Lint, test & build Next.js SSR frontend                                                                                   |
 | **e2e**              | after integration-test + web-nextjs | Full-stack compose smoke test (`e2e/e2e-test.sh`) + OWASP ZAP baseline DAST                                               |
-| **docker**           | after static-check + build + test   | Matrix (backend-ts, web-nextjs): amd64 build → Trivy image scan → smoke test (no push)                                    |
+| **cve-check**        | tag pushes only                     | CVE scans: `make cve-check` (pnpm audit + Trivy filesystem). PRs skip it; `main-rot.yml` runs it daily on `main`         |
+| **docker**           | tag pushes only                     | Matrix (backend-ts, web-nextjs): amd64 build → Trivy image scan → container-structure-test → smoke → **push to GHCR** → cosign sign → SBOM + provenance attest |
 | **mermaid-lint**     | docs-only changes                   | Runs `make mermaid-lint` when a markdown-only change skips `static-check` (validates README/CLAUDE Mermaid blocks)        |
 | **ci-pass**          | after all above                     | Gate job — fails if any required job failed or was cancelled                                                              |
 
@@ -428,24 +432,31 @@ Set secrets via **Settings → Secrets and variables → Actions → New reposit
 | `lint`                      | Code style, type errors, Dockerfile lints, `scripts/*.sh` missing +x bit          | ESLint, `tsc --noEmit`, Prettier, hadolint                                    |
 | `mermaid-lint`              | Broken ` ```mermaid ` blocks in markdown                                          | pinned `minlag/mermaid-cli`                                                   |
 | `diagrams-check`            | Committed C4 PNGs out of sync with their `docs/diagrams/*.puml` source            | pinned `plantuml/plantuml` + `git diff --exit-code`                           |
-| `vulncheck`                 | Known npm CVEs (moderate+)                                                         | `pnpm audit`                                                                  |
 | `secrets`                   | Committed credentials                                                             | [gitleaks](https://github.com/gitleaks/gitleaks) — config in `.gitleaks.toml` |
-| `trivy-fs`                  | Filesystem CVEs, secrets, Dockerfile misconfigs (CRITICAL,HIGH)                   | [Trivy](https://github.com/aquasecurity/trivy) — allowlist in `.trivyignore`  |
 | `deps-prune-check`          | Unused dependencies in any workspace                                             | `depcheck`                                                                    |
 
-### Pre-push image hardening
+**CVE scanning is tag-gated.** `make cve-check` (`pnpm audit` + Trivy filesystem scan) runs **only on tag pushes** (the `cve-check` CI job) and **daily on `main`** via `main-rot.yml` — not on every PR. This keeps PR CI fast while catching vuln-advisory decay within 24h.
 
-The `ci.yml` `docker` job and the `e2e-aca.yml` ACA-deploy workflow run the following gates **before** pushing any image. Any failure blocks the push.
+| Gate (tag / main-rot only) | Catches                                                        | Tool                                                                          |
+| -------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `vulncheck`                | Known npm CVEs (moderate+)                                     | `pnpm audit`                                                                  |
+| `trivy-fs`                 | Filesystem CVEs, secrets, Dockerfile misconfigs (CRITICAL,HIGH) | [Trivy](https://github.com/aquasecurity/trivy) — allowlist in `.trivyignore`  |
 
-| #   | Gate                                          | Catches                                                                                          | Tool                                                |
-| --- | --------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| 1   | Build local amd64 image                       | Build regressions on amd64                                                                       | `docker buildx build --load`                        |
-| 2   | **Trivy image scan** (CRITICAL/HIGH blocking) | CVEs in the base image, OS packages, build layers; misconfigs; secret leaks in layers            | `aquasecurity/trivy-action` with `image-ref:`       |
-| 3   | **Smoke test**                                | Image boots cleanly on its own (boot-marker `listening`/`Ready in`/`started on port` within 30s) | `make image-smoke-test`                             |
-| 4   | Build + push (ACA only)                       | Publishes `linux/amd64` (ACA runs amd64 only)                                                    | `docker buildx build --platform linux/amd64 --push` |
-| 5   | **Cosign keyless OIDC signing** (ACA only)    | Sigstore signature on the manifest digest                                                        | `sigstore/cosign-installer` + `cosign sign --yes`   |
+### Image publishing + hardening (tag pushes → GHCR)
 
-`ignore-unfixed: true` skips CVEs with no upstream fix available. Buildkit in-manifest attestations (`provenance` and `sbom`) are explicitly disabled (`--provenance=false --sbom=false`) so the OCI image index stays free of `unknown/unknown` platform entries — supply-chain verification comes from cosign keyless signing instead.
+On a **tag push** (`vX.Y.Z`), the `docker` job builds each service image (amd64 — ACA, the deploy target, runs amd64), runs the pre-push gates below, then publishes to **`ghcr.io/<owner>/<repo>/<service>`** with a full supply-chain trail. Any gate failure blocks the publish. (PRs run **no** image build — image work is tag-gated.)
+
+| #   | Gate / step                                   | Catches / does                                                                             | Tool                                                       |
+| --- | --------------------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 1   | Build local amd64 image (`:scan`)             | Build regressions                                                                          | `docker/build-push-action` (`load: true`)                  |
+| 2   | **Trivy image scan** (CRITICAL/HIGH blocking) | CVEs in base image, OS packages, build layers; misconfigs; secret leaks                   | `aquasecurity/trivy-action` (`image-ref:`)                 |
+| 3   | **container-structure-test**                  | Dockerfile-contract drift (USER reset to root, wrong port/entrypoint, missing files)      | `container-structure-test` (`compose/structure-test/*`)    |
+| 4   | **Smoke test**                                | Image boots cleanly (boot-marker within 30s)                                              | `make image-smoke-test`                                    |
+| 5   | Build + push to GHCR                           | Publishes `linux/amd64`                                                                    | `docker/build-push-action` (`push: true`)                  |
+| 6   | **Cosign keyless OIDC signing**               | Sigstore signature on the manifest digest                                                 | `sigstore/cosign-installer` + `cosign sign --yes`          |
+| 7   | **SBOM + SLSA provenance attestations**        | SPDX SBOM + build provenance attached as OCI referrers (index stays clean, GHCR UI renders) | `anchore/sbom-action` + `actions/attest-sbom` / `attest-build-provenance` |
+
+`ignore-unfixed: true` skips CVEs with no upstream fix. The `build-push` step keeps `provenance: false` + `sbom: false` so the OCI image index has no `unknown/unknown` platform entries (GHCR's "OS / Arch" tab renders); SBOM + provenance are attached as separate referrer attestations instead. (The `e2e-aca.yml` deploy workflow independently builds + scans + signs + pushes to **ACR** for the Azure Container Apps deployment.)
 
 The `e2e` CI job additionally runs an **OWASP ZAP baseline scan** against the running compose stack (`http://localhost:3000`):
 
@@ -453,13 +464,13 @@ The `e2e` CI job additionally runs an **OWASP ZAP baseline scan** against the ru
 | ----------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | **DAST (ZAP baseline)** | Missing security headers, info leaks, common misconfigs | `make dast` (warn-only via `-I`; only FAIL severity blocks; report uploaded as `zap-baseline-report` artifact) |
 
-The DAST scan is **inlined into `e2e`** (rather than running as a separate `dast` job per the `/harden-image-pipeline` skill default) because Next.js fronted by web-nextjs:3000 only boots correctly when the full Dapr-enabled compose stack is up — Dapr sidecar + Postgres + Redis + backend-ts. Spinning up a duplicate stack in a parallel `dast` job would double the e2e cost; reusing the existing one is cheaper at the price of slight serialization within `e2e`.
+The DAST scan is **inlined into `e2e`** (rather than a separate `dast` job) because Next.js fronted by web-nextjs:3000 only boots correctly when the full Dapr-enabled compose stack is up — reusing that stack is cheaper than spinning up a duplicate.
 
-Verify a published image's signature:
+Verify a published image's signature (image tag is v-stripped — `v1.2.3` publishes as `:1.2.3`):
 
 ```bash
-cosign verify <acr-server>/backend-ts:<git-sha> \
-  --certificate-identity-regexp 'https://github\.com/<owner>/<repo>/.*' \
+cosign verify ghcr.io/<owner-lowercase>/<repo-lowercase>/backend-ts:<version> \
+  --certificate-identity-regexp 'https://github\.com/<owner>/<repo>/\.github/.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 

@@ -367,16 +367,56 @@ jobs:
         if: always()
         run: docker compose down -v
 
-  # ── Docker (Pattern A pre-push hardening, no push) ─────────────────────────
-  # Pattern A gates per /harden-image-pipeline (amd64 only — ACA, the sole
-  # deploy target, runs amd64; see docs/deploy-aca.md):
-  #   1. amd64 load → Trivy image scan + smoke test
-  # Images are NOT pushed here; actual registry pushes happen in `e2e-aca.yml`.
-  docker:
-    needs: [changes, static-check, build, test]
-    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
+  # ── CVE scans (tag-gated) ──────────────────────────────────────────────────
+  # Per policy, ALL CVE scanning (pnpm audit + Trivy filesystem) runs ONLY on
+  # tag pushes — PRs skip it for speed. Daily coverage of `main` is provided by
+  # main-rot.yml (which runs `make static-check cve-check`).
+  cve-check:
+    needs: [changes]
+    if: ${{ !failure() && !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          install: true
+          cache: true
+
+      - name: Resolve pnpm store path
+        run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: CVE scans (pnpm audit + Trivy filesystem)
+        run: make cve-check
+
+  # ── Docker (tag-gated GHCR publish + full supply-chain hardening) ──────────
+  # Runs ONLY on tag pushes. Per service (amd64 — ACA, the deploy target, runs
+  # amd64): build → Trivy IMAGE scan → container-structure-test → smoke → push
+  # to GHCR → cosign keyless sign → SBOM + SLSA provenance attestations. The
+  # build-push keeps provenance/sbom FALSE so the image index has no
+  # unknown/unknown entries (GHCR "OS / Arch" tab renders); SBOM + provenance
+  # are attached as referrer attestations instead.
+  docker:
+    needs: [changes, static-check, build, test, cve-check]
+    if: ${{ !failure() && !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # push to GHCR via GITHUB_TOKEN
+      id-token: write # cosign keyless OIDC + attestations
+      attestations: write # SBOM + provenance attestations
     strategy:
       fail-fast: false
       matrix:
@@ -394,30 +434,125 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
-      # Gate 1 — amd64 load for scanning + smoke testing.
-      - name: Build image for scan
-        run: make image-build-prod
-        env:
-          SERVICE: ${{ matrix.service }}
-          IMAGE_TAG: ${{ github.sha }}
+      # github.repository preserves account casing; image refs must be lowercase.
+      - name: Compute lowercase image name
+        run: echo "IMAGE_NAME=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/${{ matrix.service }}" >> "$GITHUB_ENV"
 
-      # Gate 2 — Trivy image scan against the loaded image.
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          flavor: |
+            latest=true
+
+      # Gate 1 — amd64 load for scanning + structure/smoke testing.
+      - name: Build image for scan
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: app/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ matrix.service }}:scan
+          build-args: |
+            APK_UPGRADE_DATE=${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Gate 2 — Trivy IMAGE scan (CRITICAL/HIGH blocking).
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ matrix.service }}:${{ github.sha }}
+          image-ref: ${{ matrix.service }}:scan
           scanners: "vuln,secret,misconfig"
           severity: "CRITICAL,HIGH"
           exit-code: "1"
           ignore-unfixed: true
           trivyignores: ./.trivyignore.yaml
 
-      # Gate 3 — boot the image and grep logs for a known startup marker.
+      # Gate 3 — Dockerfile-contract assertions (USER, port, entrypoint).
+      - name: Container structure test
+        run: make image-test
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE_TAG: scan
+
+      # Gate 4 — boot the image and grep logs for a known startup marker.
       - name: Smoke test
         run: make image-smoke-test
         env:
           SERVICE: ${{ matrix.service }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: scan
+
+      # All gates passed → publish to GHCR.
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: app/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false # keep image index free of unknown/unknown entries so GHCR "OS / Arch" renders
+          sbom: false # SBOM attached below as a referrer attestation instead
+          build-args: |
+            APK_UPGRADE_DATE=${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Post-push — cosign keyless OIDC signing by digest.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign image with cosign
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r tag; do
+            [ -z "$tag" ] && continue
+            echo "→ cosign sign ${tag}@${DIGEST}"
+            cosign sign --yes "${tag}@${DIGEST}"
+          done <<< "${TAGS}"
+
+      # SBOM (SPDX) generated from the pushed image, attached as an attestation.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@f6c3d0fe42c3cf876e3462574e4c9416b5e0f07a # v0.9.0
+        with:
+          image: ${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.service }}.spdx.json
+
+      - name: Attest SBOM
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          sbom-path: sbom-${{ matrix.service }}.spdx.json
+          push-to-registry: true
+
+      # SLSA build provenance attestation (referrer-based, not in-manifest).
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
   # ── Gate ───────────────────────────────────────────────────────────────────
   # ── Mermaid lint (docs-only fast path) ─────────────────────────────────────
@@ -454,6 +589,7 @@ jobs:
         integration-test,
         web-nextjs,
         e2e,
+        cve-check,
         docker,
         mermaid-lint,
       ]

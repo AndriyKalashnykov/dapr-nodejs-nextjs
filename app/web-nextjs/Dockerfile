@@ -16,6 +16,18 @@ RUN pnpm run build
 # No pnpm/corepack at runtime; entry is `node server.js`.
 FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS runtime
 ENV NODE_ENV=production
+# Operator-tunable runtime knobs (externalized per configuration rules).
+# HEALTHCHECK_HOST is 127.0.0.1 (not localhost) to dodge alpine's IPv6-first
+# `[::1]` resolution against an IPv4-bound server.
+ARG APP_INTERNAL_PORT=3000
+ARG HEALTHCHECK_HOST=127.0.0.1
+ENV APP_INTERNAL_PORT=${APP_INTERNAL_PORT} \
+    HEALTHCHECK_HOST=${HEALTHCHECK_HOST}
+# Next.js standalone reads $HOSTNAME as its bind address; unset it resolves to
+# the container hostname (binds eth0 only, not loopback) so the HEALTHCHECK's
+# 127.0.0.1 probe is refused. Bind 0.0.0.0 (all interfaces) — the documented
+# Next-standalone-in-Docker setting; compose service DNS still reaches it.
+ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 # Patch base-image system libs that lag the pinned digest. node:24-alpine
 # ships libcrypto3/libssl3 3.5.6-r0 (CVE-2026-45447, HIGH); alpine v3.24/main
@@ -32,6 +44,10 @@ WORKDIR /app
 # override cannot reach it — removing npm eliminates the finding at the source
 # (attack-surface reduction, not a Trivy waiver). Re-evaluate once the base
 # image ships an npm whose bundled undici is >= 6.27.0.
+# Cache-bust so the apk upgrade re-executes even when the layer is gha-cached
+# (CI passes APK_UPGRADE_DATE=${{ github.run_id }} for per-run freshness; the
+# Makefile passes a daily date). A changed in-scope ARG busts the FOLLOWING RUN.
+ARG APK_UPGRADE_DATE=manual
 RUN apk --no-cache upgrade && rm -rf /var/cache/apk/* \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
               /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
@@ -39,5 +55,9 @@ COPY --from=build --chown=node:node /workspace/app/web-nextjs/.next/standalone /
 COPY --from=build --chown=node:node /workspace/app/web-nextjs/.next/static /app/app/web-nextjs/.next/static
 COPY --from=build --chown=node:node /workspace/app/web-nextjs/public /app/app/web-nextjs/public
 USER node
-EXPOSE 3000
+EXPOSE ${APP_INTERNAL_PORT}
+# TCP-connect liveness probe via node's net. Flag durations are literal —
+# HEALTHCHECK flags are parsed at build time and do NOT expand ARG/ENV.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+    CMD node -e "require('net').connect(Number(process.env.APP_INTERNAL_PORT||3000),process.env.HEALTHCHECK_HOST||'127.0.0.1').on('connect',function(){process.exit(0)}).on('error',function(){process.exit(1)})"
 CMD ["node", "app/web-nextjs/server.js"]

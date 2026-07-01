@@ -43,10 +43,11 @@ make mermaid-lint   # Validate every ```mermaid block in markdown via pinned min
 make vulncheck      # pnpm audit (fails on moderate+)
 make secrets        # gitleaks scan
 make trivy-fs       # Trivy filesystem CVE/secret/misconfig scan
+make cve-check      # CVE scans (vulncheck + trivy-fs) — tag-gated in CI + daily on main; NOT on every PR
 make deps-prune-check # Fail if any workspace has unused dependencies (depcheck)
-make static-check   # Composite gate — check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check
+make static-check   # PR-path gate — check-toolchain-alignment + lint + mermaid-lint + diagrams-check + secrets + deps-prune-check (no CVE scan)
 make test           # Unit tests across SDK + backend (with coverage)
-make ci             # Full CI pipeline locally (format-check + static-check + test + build)
+make ci             # Full CI pipeline locally (format-check + static-check + cve-check + test + build)
 
 # Test (containers needed)
 make integration-test # Backend integration tests (requires Postgres + Dapr)
@@ -207,14 +208,15 @@ Each CI job delegates to a Makefile target. The `changes` detector (using `dorny
 
 1. **changes**: detect whether the PR touches code (vs. docs/images only). Emits `code` and `docs` outputs; `docs/diagrams/**/*.puml` is re-included into `code` so a diagram-source edit runs `diagrams-check`
 2. **build** (`make sdk-ci`): compile + lint + unit-test the SDK; upload `sdk-build` artifact
-3. **static-check** (`make static-check`, depends on changes): composite gate — `check-toolchain-alignment` + `lint` + `mermaid-lint` + `diagrams-check` + `vulncheck` + `secrets` (gitleaks) + `trivy-fs` + `deps-prune-check`
+3. **static-check** (`make static-check`, depends on changes): PR-path gate — `check-toolchain-alignment` + `lint` + `mermaid-lint` + `diagrams-check` + `secrets` (gitleaks) + `deps-prune-check`. **No CVE scan** — CVE scanning is tag-gated (see job 8)
 4. **test** (`make backend-test`, depends on build): backend unit tests with coverage
 5. **integration-test** (`make backend-test-integration`, depends on build): Postgres service + Dapr sidecar, real DB, real Dapr
 6. **web-nextjs** (`make web-nextjs-ci`, depends on changes): lint + Vitest + Next.js production build
 7. **e2e** (depends on integration-test + web-nextjs): docker compose build/up/test/down via `e2e/e2e-test.sh`, then an OWASP ZAP baseline **DAST** scan (`make dast`) against the running stack
-8. **docker** (depends on changes + static-check + build + test): matrix (`backend-ts`, `web-nextjs`) — `make image-build-prod` → Trivy **image** scan → `make image-smoke-test` (amd64, no push)
-9. **mermaid-lint** (docs-only fast path): runs `make mermaid-lint` when a markdown-only change skips `static-check`, so README/CLAUDE Mermaid blocks stay validated
-10. **ci-pass**: aggregate gate — fails if any of the above failed or was cancelled
+8. **cve-check** (**tag pushes only**): `make cve-check` — `pnpm audit` + Trivy **filesystem** scan. PRs skip it for speed; `main-rot.yml` runs it daily on `main` so vuln-advisory decay still surfaces within 24h
+9. **docker** (**tag pushes only**; depends on changes + static-check + build + test + cve-check): matrix (`backend-ts`, `web-nextjs`) — build (amd64) → Trivy **image** scan → `make image-test` (container-structure-test) → `make image-smoke-test` → **push to `ghcr.io/<owner>/<repo>/<service>`** → cosign keyless sign → SBOM + SLSA provenance attestations (referrer-based). `provenance/sbom` stay `false` on the build-push so the GHCR "OS / Arch" tab renders
+10. **mermaid-lint** (docs-only fast path): runs `make mermaid-lint` when a markdown-only change skips `static-check`, so README/CLAUDE Mermaid blocks stay validated
+11. **ci-pass**: aggregate gate — fails if any of the above failed or was cancelled (tag-gated jobs are `skipped`, not failed, on non-tag pushes)
 
 ### Port allocation in CI / parallel runs
 
@@ -248,7 +250,8 @@ Always verify locally before committing and pushing. All Makefile targets must p
 ```bash
 make compile           # compile SDK + backend TypeScript
 make lint              # lint + typecheck + prettier + hadolint + scripts +x guard + dockerfile runtime-pnpm guard + terraform validate
-make static-check      # composite gate (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check)
+make static-check      # PR-path gate (check-toolchain-alignment + lint + mermaid-lint + diagrams-check + secrets + deps-prune-check; no CVE scan)
+make cve-check         # CVE scans (pnpm audit + trivy-fs) — tag-gated in CI + daily on main
 make test              # unit tests with coverage (SDK + backend)
 make ci                # full local CI pipeline (static-check + test + build)
 make ci-run            # run GitHub Actions workflow locally via act (skips e2e/mermaid-lint/secrets — see notes)
@@ -319,7 +322,7 @@ Project CI (`.github/workflows/ci.yml`) runs only on `pull_request` / push-to-ma
 1. **Vuln advisory decay** — `pnpm audit` finds new upstream advisories for packages already in the lockfile.
 2. **Latent regression decay** — a bug already on main only surfaces when a PR triggers a rebuild (e.g., the corepack/pnpm trap in `app/backend-ts/Dockerfile` was already wrong on `main` for ~10 days before any PR's image rebuild revealed it).
 
-`.github/workflows/main-rot.yml` runs `make static-check` against `main` daily (07:00 UTC) plus on-demand via `workflow_dispatch`. A failure surfaces within 24h via GitHub workflow-failure email; no PR required.
+`.github/workflows/main-rot.yml` runs `make static-check cve-check` against `main` daily (07:00 UTC) plus on-demand via `workflow_dispatch`. It includes `cve-check` (which the PR/push `static-check` no longer does — CVE scanning is tag-gated) so vuln-advisory decay on `main` still surfaces within 24h. A failure surfaces via GitHub workflow-failure email; no PR required.
 
 To trigger manually: `gh workflow run main-rot.yml`.
 

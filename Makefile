@@ -330,8 +330,11 @@ check-toolchain-alignment:
 	 if [ "$$fail" -ne 0 ]; then echo "ERROR: toolchain version drift — align the files above so all agree"; exit 1; fi; \
 	 printf 'toolchain aligned: node major %s, pnpm %s\n' "$$mise_node" "$$mise_pnpm"
 
-#static-check: @ Composite quality gate: check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check
-static-check: check-toolchain-alignment lint mermaid-lint diagrams-check vulncheck secrets trivy-fs deps-prune-check
+#static-check: @ Composite quality gate (PR path, no CVE scans): check-toolchain-alignment + lint + mermaid-lint + diagrams-check + secrets + deps-prune-check
+static-check: check-toolchain-alignment lint mermaid-lint diagrams-check secrets deps-prune-check
+
+#cve-check: @ CVE scans (pnpm audit + Trivy filesystem) — runs on TAG pushes in CI + daily on main via main-rot; not on every PR
+cve-check: vulncheck trivy-fs
 
 #test: @ Run unit tests across SDK and backend
 test: sdk-compile
@@ -581,6 +584,15 @@ image-smoke-test:
 	 $(CONTAINER_CMD) rm -f "$$SERVICE-smoke" >/dev/null || true; \
 	 exit 1
 
+#image-test: @ container-structure-test: assert the Dockerfile contract (USER, port, entrypoint) for SERVICE; requires SERVICE + IMAGE_TAG
+image-test: deps
+	@: $${SERVICE:?required — backend-ts or web-nextjs}
+	@: $${IMAGE_TAG:?required — image tag}
+	@printf '\n***container-structure-test: %s:%s***\n\n' "$$SERVICE" "$$IMAGE_TAG"
+	@container-structure-test test \
+	   --image "$$SERVICE:$$IMAGE_TAG" \
+	   --config compose/structure-test/$$SERVICE.yaml
+
 #image-scan-prod: @ Trivy-scan an image built by image-build-prod (CRITICAL,HIGH blocking)
 image-scan-prod: deps
 	@: $${SERVICE:?required — backend-ts or web-nextjs}
@@ -736,8 +748,10 @@ upgrade: deps
 
 # ── CI / Release ─────────────────────────────────────────────────────────────
 
-#ci: @ Run full CI pipeline locally (static-check + test + build)
-ci: format-check static-check test build
+#ci: @ Run full CI pipeline locally (static-check + cve-check + test + build)
+# Includes cve-check so a local run catches CVEs before pushing; the CI
+# workflow only runs cve-check on tag pushes (per the tag-gated CVE policy).
+ci: format-check static-check cve-check test build
 	@printf '\n***CI pipeline passed.***\n\n'
 
 #check-version: @ Ensure VERSION variable is set and follows semver (vX.Y.Z)
@@ -835,7 +849,7 @@ renovate-validate: deps
         up run up-db up-dapr up-otel up-infra down down-otel \
         debug terminal format format-check \
         lint lint-scripts-exec lint-docker-no-runtime-pnpm vulncheck secrets trivy-fs \
-        check-toolchain-alignment static-check \
+        check-toolchain-alignment static-check cve-check \
         test integration-test test-integration \
         ci-dapr-up ci-db-prepare \
         sdk-ci backend-lint backend-test backend-test-integration \
@@ -843,7 +857,7 @@ renovate-validate: deps
         e2e e2e-browser e2e-aca dast infra-validate mermaid-lint \
         diagrams diagrams-clean diagrams-check \
         tf-init tf-apply-acr tf-acr-login-server tf-apply tf-destroy \
-        image-build-prod image-scan-prod image-smoke-test image-push-prod \
+        image-build-prod image-scan-prod image-smoke-test image-test image-push-prod \
         psql migrate redis-cli shell logs \
         prune login update upgrade \
         ci check-version release ci-run renovate-validate
