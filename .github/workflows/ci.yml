@@ -555,11 +555,13 @@ jobs:
             cosign sign --yes "${tag}@${DIGEST}"
           done <<< "${TAGS}"
 
-      # SBOM (SPDX) generated from the pushed image, attached as an attestation.
+      # SBOM (SPDX) generated from the LOCAL :scan image (already in the daemon
+      # from the load:true build) — avoids pulling the just-pushed image, which
+      # is private on a first personal-account publish. Attached by pushed digest.
       - name: Generate SBOM
-        uses: anchore/sbom-action@f6c3d0fe42c3cf876e3462574e4c9416b5e0f07a # v0.9.0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
-          image: ${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}
+          image: ${{ matrix.service }}:scan
           format: spdx-json
           output-file: sbom-${{ matrix.service }}.spdx.json
 
