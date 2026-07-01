@@ -7,7 +7,7 @@
   "labels": ["dependencies"],
   "prConcurrentLimit": 50,
   "prHourlyLimit": 0,
-  "platformAutomerge": true,
+  "platformAutomerge": false,
   "automerge": true,
   "automergeType": "pr",
   "automergeStrategy": "squash",
@@ -37,6 +37,11 @@
     {
       "description": "Wait 3 days before automerging major updates",
       "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Buffer mise (aqua/github-tags) tools 3 days. Two reasons: (1) a freshly-tagged release whose asset isn't published yet makes `mise install` 404 (the trivy 0.71.1 phantom-version incident); (2) it matches the npm 3-day buffer so a grouped pnpm bump (mise side + npm/Dockerfile side) becomes ready at the same time and lands atomically — otherwise the un-buffered mise side advances first and trips `check-toolchain-alignment`.",
+      "matchManagers": ["mise"],
       "minimumReleaseAge": "3 days"
     },
     {

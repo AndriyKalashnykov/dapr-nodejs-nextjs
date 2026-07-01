@@ -2,7 +2,7 @@
 # Build context is the repo root.
 FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS build
 ENV NODE_ENV=production
-RUN corepack enable && corepack prepare pnpm@11.6.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 WORKDIR /workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY app/web-nextjs ./app/web-nextjs

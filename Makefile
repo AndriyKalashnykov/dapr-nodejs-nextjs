@@ -217,14 +217,14 @@ down-otel:
 
 #debug: @ Start a service in debug mode (SERVICE=backend-ts make debug)
 debug:
-	@if [ -z "$$SERVICE" ]; then echo "ERROR: SERVICE is required. Usage: SERVICE=backend-ts make debug"; exit 1; fi
+	@if [ -z "$${SERVICE:-}" ]; then echo "ERROR: SERVICE is required. Usage: SERVICE=backend-ts make debug"; exit 1; fi
 	@$(CONTAINER_CMD) image exists microservice-sdk-build 2>/dev/null || $(MAKE) setup
 	@printf '\n***Starting %s in debug mode***\n\n' "$$SERVICE"
 	@$(CONTAINER_CMD) compose -f docker-compose.yaml -f app/$$SERVICE/docker-compose.debug.yaml up
 
 #terminal: @ Open a shell in a running service container (SERVICE=backend-ts make terminal)
 terminal:
-	@if [ -z "$$SERVICE" ]; then echo "ERROR: SERVICE is required. Usage: SERVICE=backend-ts make terminal"; exit 1; fi
+	@if [ -z "$${SERVICE:-}" ]; then echo "ERROR: SERVICE is required. Usage: SERVICE=backend-ts make terminal"; exit 1; fi
 	@$(CONTAINER_CMD) compose exec -it $$SERVICE /bin/sh
 
 #format: @ Auto-format code with Prettier across all workspaces
@@ -310,8 +310,28 @@ trivy-fs: deps
 	   --exit-code 1 \
 	   .
 
-#static-check: @ Composite quality gate: lint + mermaid-lint + vulncheck + secrets + trivy-fs + deps-prune-check
-static-check: lint mermaid-lint diagrams-check vulncheck secrets trivy-fs deps-prune-check
+#check-toolchain-alignment: @ Fail if Node major or pnpm version drift across .mise.toml, package.json, and the built Dockerfiles
+# Node "24" and pnpm are mirrored in .mise.toml + package.json + every built
+# Dockerfile. Renovate groups them, but this "suspenders" gate catches manual
+# edits / conflict resolutions / partial bumps (e.g. a Renovate bump landing on
+# the mise side before the npm-buffered side). Wired FIRST in static-check so it
+# fast-fails before the slower lint/scan steps.
+check-toolchain-alignment:
+	@DOCKERFILES="app/backend-ts/Dockerfile app/web-nextjs/Dockerfile app/web-nextjs/Dockerfile.dev shared/microservice/Dockerfile"; \
+	 mise_pnpm=$$(grep -oE '"aqua:pnpm/pnpm"[[:space:]]*=[[:space:]]*"[0-9.]+"' .mise.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	 pkg_pnpm=$$(grep -oE '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@[0-9.]+"' package.json | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	 docker_pnpm=$$(grep -rhoE 'corepack prepare pnpm@[0-9.]+' $$DOCKERFILES | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -u); \
+	 mise_node=$$(grep -oE '^node[[:space:]]*=[[:space:]]*"[0-9]+"' .mise.toml | grep -oE '[0-9]+'); \
+	 docker_node=$$(grep -rhoE 'node:[0-9]+-alpine' $$DOCKERFILES | grep -oE '[0-9]+' | sort -u); \
+	 fail=0; \
+	 [ "$$pkg_pnpm" = "$$mise_pnpm" ] || { echo "pnpm drift: package.json $$pkg_pnpm != .mise.toml $$mise_pnpm"; fail=1; }; \
+	 for v in $$docker_pnpm; do [ "$$v" = "$$mise_pnpm" ] || { echo "pnpm drift: Dockerfile $$v != .mise.toml $$mise_pnpm"; fail=1; }; done; \
+	 for v in $$docker_node; do [ "$$v" = "$$mise_node" ] || { echo "node major drift: Dockerfile node:$$v != .mise.toml node $$mise_node"; fail=1; }; done; \
+	 if [ "$$fail" -ne 0 ]; then echo "ERROR: toolchain version drift — align the files above so all agree"; exit 1; fi; \
+	 printf 'toolchain aligned: node major %s, pnpm %s\n' "$$mise_node" "$$mise_pnpm"
+
+#static-check: @ Composite quality gate: check-toolchain-alignment + lint + mermaid-lint + diagrams-check + vulncheck + secrets + trivy-fs + deps-prune-check
+static-check: check-toolchain-alignment lint mermaid-lint diagrams-check vulncheck secrets trivy-fs deps-prune-check
 
 #test: @ Run unit tests across SDK and backend
 test: sdk-compile
@@ -326,31 +346,37 @@ ci-dapr-up:
 	@sed "s|__HOME__|$$HOME|g" scripts/ci-dapr/local-secretstore.yaml \
 	   > "$$HOME/.dapr/components/local-secretstore.yaml"
 	@cp scripts/ci-dapr/secrets.json "$$HOME/.dapr/secrets.json"
-	@printf '\n***Starting Dapr sidecar (port 3500)***\n\n'
-	@PATH="$$HOME/.dapr/bin:$$PATH" daprd \
+	@DAPR_HOST="$${DAPR_HOST:-localhost}"; DAPR_PORT="$${DAPR_PORT:-3500}"; \
+	 READY_TIMEOUT="$${DAPR_READY_TIMEOUT:-30}"; POLL_INTERVAL="$${DAPR_POLL_INTERVAL:-1}"; \
+	 printf '\n***Starting Dapr sidecar (port %s)***\n\n' "$$DAPR_PORT"; \
+	 PATH="$$HOME/.dapr/bin:$$PATH" daprd \
 	   --app-id backend-ts \
-	   --dapr-http-port 3500 \
+	   --dapr-http-port "$$DAPR_PORT" \
 	   --resources-path "$$HOME/.dapr/components" \
 	   --log-level error \
-	   > /tmp/daprd.log 2>&1 &
-	@printf 'Waiting for Dapr sidecar on :3500...\n'
-	@timeout 30 bash -c \
-	   'until curl -sf http://localhost:3500/v1.0/healthz > /dev/null; do sleep 1; done' \
+	   > /tmp/daprd.log 2>&1 & \
+	 printf 'Waiting for Dapr sidecar on %s:%s...\n' "$$DAPR_HOST" "$$DAPR_PORT"; \
+	 timeout "$$READY_TIMEOUT" bash -c \
+	   "until curl -sf http://$$DAPR_HOST:$$DAPR_PORT/v1.0/healthz > /dev/null; do sleep $$POLL_INTERVAL; done" \
 	   || { echo "=== daprd log ==="; cat /tmp/daprd.log; exit 1; }
 	@printf 'Dapr sidecar ready.\n'
 
 #ci-db-prepare: @ Create the integration-test schema (CI: integration-test job)
 ci-db-prepare:
 	@printf '\n***Creating backend_ts_test schema***\n\n'
-	@PGPASSWORD=postgres psql -h localhost -U postgres -d postgres \
+	@PGPASSWORD="$${DB_PASSWORD:-postgres}" psql \
+	   -h "$${DB_HOST:-localhost}" -p "$${DB_PORT:-5432}" \
+	   -U "$${DB_USER:-postgres}" -d "$${DB_NAME:-postgres}" \
 	   -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;"
 
 #integration-test: @ Run backend integration tests (requires Postgres + Dapr sidecar)
 integration-test: install
-	@curl -sf --max-time 5 http://localhost:3500/v1.0/healthz >/dev/null 2>&1 || { echo "integration-test: Dapr sidecar not reachable on http://localhost:3500 — start the stack first (make up + make ci-dapr-up)."; exit 1; }
-	@timeout 5 bash -c 'exec 3<>/dev/tcp/localhost/5432' 2>/dev/null || { echo "integration-test: Postgres not reachable on localhost:5432 — run make up first."; exit 1; }
-	@$(CONTAINER_CMD) exec demo-ts-postgres-1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;" 2>/dev/null || true
-	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 pnpm --filter backend-ts run test:integration:cov
+	@DH="$${DAPR_HOST:-localhost}"; DP="$${DAPR_PORT:-3500}"; MT="$${CURL_MAX_TIME:-5}"; \
+	 curl -sf --max-time "$$MT" "http://$$DH:$$DP/v1.0/healthz" >/dev/null 2>&1 || { echo "integration-test: Dapr sidecar not reachable on http://$$DH:$$DP — start the stack first (make up + make ci-dapr-up)."; exit 1; }
+	@DBH="$${DB_HOST:-localhost}"; DBP="$${DB_PORT:-5432}"; TO="$${TCP_TIMEOUT:-5}"; \
+	 timeout "$$TO" bash -c "exec 3<>/dev/tcp/$$DBH/$$DBP" 2>/dev/null || { echo "integration-test: Postgres not reachable on $$DBH:$$DBP — run make up first."; exit 1; }
+	@$(CONTAINER_CMD) exec $(COMPOSE_PROJECT)-postgres-1 psql -U "$${DB_USER:-postgres}" -d "$${DB_NAME:-postgres}" -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;" 2>/dev/null || true
+	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST="$${DB_HOST:-localhost}" DB_PORT="$${DB_PORT:-5432}" DB_NAME="$${DB_NAME:-postgres}" DB_SCHEMA=backend_ts JWT_SECRET_KEY="$${JWT_SECRET_KEY:-secret}" DAPR_HOST="$${DAPR_HOST:-localhost}" DAPR_PORT="$${DAPR_PORT:-3500}" pnpm --filter backend-ts run test:integration:cov
 
 #test-integration: @ Deprecated alias for integration-test (kept for compatibility)
 test-integration: integration-test
@@ -367,21 +393,21 @@ e2e: build
 
 #e2e-browser: @ Run Playwright browser e2e against the running stack (requires `make up` first)
 e2e-browser: install
-	@P="$${NEXTJS_PORT:-3000}"; curl -sf --max-time 5 "http://localhost:$$P" >/dev/null 2>&1 || { echo "e2e-browser: web app not reachable on http://localhost:$$P — run make up first."; exit 1; }
+	@H="$${APP_HOST:-localhost}"; P="$${NEXTJS_PORT:-3000}"; curl -sf --max-time "$${CURL_MAX_TIME:-5}" "http://$$H:$$P" >/dev/null 2>&1 || { echo "e2e-browser: web app not reachable on http://$$H:$$P — run make up first."; exit 1; }
 	@pnpm exec playwright install --with-deps chromium >/dev/null 2>&1 || true
 	@pnpm exec playwright test --config e2e/playwright/playwright.config.ts
 
 #dast: @ ZAP baseline DAST scan against the running stack at NEXTJS_PORT (requires `make up -d` first); -I = warn-only, fail only on FAIL severity
 dast:
-	@NEXTJS_PORT="$${NEXTJS_PORT:-3000}"; \
-	 printf '\n***ZAP baseline scan against http://localhost:%s***\n\n' "$$NEXTJS_PORT"; \
+	@APP_HOST="$${APP_HOST:-localhost}"; NEXTJS_PORT="$${NEXTJS_PORT:-3000}"; \
+	 printf '\n***ZAP baseline scan against http://%s:%s***\n\n' "$$APP_HOST" "$$NEXTJS_PORT"; \
 	 rm -rf zap-output 2>/dev/null || $(CONTAINER_CMD) run --rm --user 0 -v "$(CURDIR):/work" -w /work --entrypoint rm ghcr.io/zaproxy/zaproxy:$(ZAP_VERSION) -rf zap-output; \
 	 mkdir -p zap-output && chmod 777 zap-output; \
 	 $(CONTAINER_CMD) run --rm --network host \
 	   -v "$(CURDIR)/zap-output:/zap/wrk:rw" \
 	   ghcr.io/zaproxy/zaproxy:$(ZAP_VERSION) \
 	   zap-baseline.py \
-	     -t "http://localhost:$$NEXTJS_PORT" \
+	     -t "http://$$APP_HOST:$$NEXTJS_PORT" \
 	     -I \
 	     -r zap-report.html \
 	     -J zap-report.json \
@@ -643,7 +669,7 @@ backend-test: install
 #backend-test-integration: @ Backend: integration tests with coverage (requires Postgres + Dapr)
 backend-test-integration: install
 	@[ -f packages/@sos/sdk/build/index.js ] || $(MAKE) sdk-compile
-	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 pnpm --filter backend-ts run test:integration:cov
+	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST="$${DB_HOST:-localhost}" DB_PORT="$${DB_PORT:-5432}" DB_NAME="$${DB_NAME:-postgres}" DB_SCHEMA=backend_ts JWT_SECRET_KEY="$${JWT_SECRET_KEY:-secret}" DAPR_HOST="$${DAPR_HOST:-localhost}" DAPR_PORT="$${DAPR_PORT:-3500}" pnpm --filter backend-ts run test:integration:cov
 
 #web-nextjs-test: @ Next.js: unit tests with coverage
 web-nextjs-test: install
@@ -682,7 +708,7 @@ shell:
 
 #logs: @ Tail logs for a specific service (SERVICE=backend-ts make logs)
 logs:
-	@if [ -z "$$SERVICE" ]; then echo "ERROR: SERVICE is required. Usage: SERVICE=backend-ts make logs"; exit 1; fi
+	@if [ -z "$${SERVICE:-}" ]; then echo "ERROR: SERVICE is required. Usage: SERVICE=backend-ts make logs"; exit 1; fi
 	@$(CONTAINER_CMD) compose logs -f $$SERVICE
 
 # ── Maintenance ──────────────────────────────────────────────────────────────
@@ -724,8 +750,21 @@ endif
 
 #release: @ Create and push a release tag (requires VERSION=vX.Y.Z)
 release: check-version
+	@# Fail BEFORE any mutation/prompt: a pre-existing tag (local or remote)
+	@# would let the commit land but abort `git tag`, leaving a dangling
+	@# "Cut vX release" commit after the user already confirmed.
+	@if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then \
+	   echo "ERROR: tag ${VERSION} already exists locally. Remove it first: git tag -d ${VERSION}"; exit 1; fi
+	@if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then \
+	   echo "ERROR: tag ${VERSION} already exists on origin. Remove it first: git push origin :refs/tags/${VERSION}"; exit 1; fi
 	@echo -n "Are you sure to create and push ${VERSION} tag? [y/N] " && read ans && [ $${ans:-N} = y ]
-	@git commit -a -s -m "Cut ${VERSION} release"
+	@# `git commit -a` exits non-zero on a clean tree ("nothing to commit"),
+	@# which would abort the release before tagging — tag HEAD as-is instead.
+	@if [ -n "$$(git status --porcelain)" ]; then \
+	   git commit -a -s -m "Cut ${VERSION} release"; \
+	 else \
+	   echo "Working tree clean — tagging HEAD as-is."; \
+	 fi
 	@git tag ${VERSION}
 	@git push origin ${VERSION}
 	@git push
@@ -734,6 +773,10 @@ release: check-version
 # ── Local CI with act ───────────────────────────────────────────────────────
 
 # Jobs that work cleanly under act (no docker-in-docker required).
+# Excluded on purpose: `integration-test` (needs a live Postgres + Dapr
+# sidecar — run via `make integration-test` after `make up`), `e2e`/`docker`
+# (docker-in-docker), and `ci-pass` (a real-CI aggregator gate with nothing to
+# execute locally).
 ACT_JOBS ?= changes static-check build test web-nextjs
 
 #ci-run: @ Run GitHub Actions workflow locally using act (mise-managed). Skips e2e (DinD).
@@ -791,7 +834,8 @@ renovate-validate: deps
         setup build compile sdk-compile \
         up run up-db up-dapr up-otel up-infra down down-otel \
         debug terminal format format-check \
-        lint lint-scripts-exec lint-docker-no-runtime-pnpm vulncheck secrets trivy-fs static-check \
+        lint lint-scripts-exec lint-docker-no-runtime-pnpm vulncheck secrets trivy-fs \
+        check-toolchain-alignment static-check \
         test integration-test test-integration \
         ci-dapr-up ci-db-prepare \
         sdk-ci backend-lint backend-test backend-test-integration \
