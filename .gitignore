@@ -49,3 +49,6 @@ zap-output/
 # Architecture diagrams: the render-trigger stamp is not an artifact (the
 # committed PNGs under docs/diagrams/out/ are, and must stay tracked).
 docs/diagrams/out/.plantuml-*.stamp
+
+# SBOM artifacts generated in CI (docker job)
+sbom-*.spdx.json

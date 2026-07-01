@@ -55,5 +55,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      - name: Static check
-        run: make static-check
+      # cve-check is NOT part of the PR/push static-check (CVE scanning is
+      # tag-gated); main-rot runs it daily so vuln-advisory decay on `main`
+      # (a new CVE against an unchanged dep) still surfaces within 24h.
+      - name: Static check + CVE scan
+        run: make static-check cve-check

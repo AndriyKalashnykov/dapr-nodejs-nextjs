@@ -42,6 +42,10 @@ terraform = "1.15.6"
 # Secret scanner — wired into `make secrets` (part of `make static-check`).
 "aqua:gitleaks/gitleaks" = "8.30.1"
 
+# container-structure-test — Dockerfile-contract assertions (USER, port,
+# entrypoint) wired into `make image-test`, run in the tag-gated `docker` job.
+"aqua:GoogleContainerTools/container-structure-test" = "1.22.1"
+
 # Filesystem CVE / secret / misconfig scanner — wired into `make trivy-fs`
 # (part of `make static-check`). Replaces ad-hoc Docker scans.
 "aqua:aquasecurity/trivy" = "0.71.1"

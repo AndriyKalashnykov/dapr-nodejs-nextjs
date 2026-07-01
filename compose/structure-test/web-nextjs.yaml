@@ -1,0 +1,32 @@
+# container-structure-test: asserts the web-nextjs image's Dockerfile contract
+# (independent of runtime behaviour, which the smoke test + e2e cover).
+# Run via `make image-test SERVICE=web-nextjs IMAGE_TAG=<tag>`.
+schemaVersion: 2.0.0
+
+metadataTest:
+  # Must match the Dockerfile EXPOSE (via APP_INTERNAL_PORT) and Next's bind port.
+  exposedPorts:
+    - "3000"
+  # Non-root: the runtime stage drops to `USER node`. A reset to root here fails.
+  user: "node"
+  workdir: "/app"
+  # Must match the runtime CMD (Next.js standalone server).
+  cmd:
+    - "node"
+    - "app/web-nextjs/server.js"
+
+fileExistenceTests:
+  - name: standalone server present
+    path: /app/app/web-nextjs/server.js
+    shouldExist: true
+  # npm/corepack are stripped in the runtime stage (attack-surface reduction).
+  - name: npm removed from runtime image
+    path: /usr/local/bin/npm
+    shouldExist: false
+
+commandTests:
+  - name: node runtime is v24
+    command: node
+    args: ["--version"]
+    expectedOutput:
+      - "(?m)^v24\\."
