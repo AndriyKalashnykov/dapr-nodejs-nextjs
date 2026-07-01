@@ -339,6 +339,8 @@ ci-db-prepare:
 
 #integration-test: @ Run backend integration tests (requires Postgres + Dapr sidecar)
 integration-test: install
+	@curl -sf --max-time 5 http://localhost:3500/v1.0/healthz >/dev/null 2>&1 || { echo "integration-test: Dapr sidecar not reachable on http://localhost:3500 — start the stack first (make up + make ci-dapr-up)."; exit 1; }
+	@timeout 5 bash -c 'exec 3<>/dev/tcp/localhost/5432' 2>/dev/null || { echo "integration-test: Postgres not reachable on localhost:5432 — run make up first."; exit 1; }
 	@$(CONTAINER_CMD) exec demo-ts-postgres-1 psql -U postgres -d postgres -c "CREATE SCHEMA IF NOT EXISTS backend_ts_test;" 2>/dev/null || true
 	@NODE_ENV=test SERVICE_NAME=backend-ts DB_HOST=localhost DB_PORT=5432 DB_NAME=postgres DB_SCHEMA=backend_ts JWT_SECRET_KEY=secret DAPR_HOST=localhost DAPR_PORT=3500 pnpm --filter backend-ts run test:integration:cov
 
@@ -357,6 +359,7 @@ e2e: build
 
 #e2e-browser: @ Run Playwright browser e2e against the running stack (requires `make up` first)
 e2e-browser: install
+	@P="$${NEXTJS_PORT:-3000}"; curl -sf --max-time 5 "http://localhost:$$P" >/dev/null 2>&1 || { echo "e2e-browser: web app not reachable on http://localhost:$$P — run make up first."; exit 1; }
 	@pnpm exec playwright install --with-deps chromium >/dev/null 2>&1 || true
 	@pnpm exec playwright test --config e2e/playwright/playwright.config.ts
 
@@ -364,6 +367,7 @@ e2e-browser: install
 dast:
 	@NEXTJS_PORT="$${NEXTJS_PORT:-3000}"; \
 	 printf '\n***ZAP baseline scan against http://localhost:%s***\n\n' "$$NEXTJS_PORT"; \
+	 rm -rf zap-output 2>/dev/null || $(CONTAINER_CMD) run --rm --user 0 -v "$(CURDIR):/work" -w /work --entrypoint rm ghcr.io/zaproxy/zaproxy:$(ZAP_VERSION) -rf zap-output; \
 	 mkdir -p zap-output && chmod 777 zap-output; \
 	 $(CONTAINER_CMD) run --rm --network host \
 	   -v "$(CURDIR)/zap-output:/zap/wrk:rw" \
