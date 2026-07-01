@@ -23,7 +23,17 @@ WORKDIR /app
 # dropping to `node`). A real upgrade, not a Trivy waiver; mirrors
 # app/web-nextjs/Dockerfile so scaffolded services don't reintroduce a
 # fixable base-image CVE (e.g. libcrypto3/libssl3 CVE-2026-45447).
-RUN apk --no-cache upgrade && rm -rf /var/cache/apk/*
+#
+# Also strip the globally-installed npm + corepack: the runtime invokes vite's
+# binary directly (./node_modules/.bin/vite) and never shells out to a package
+# manager, and npm bundles its own `undici` at
+# /usr/local/lib/node_modules/npm/node_modules/undici (a base-image copy, NOT a
+# project dependency — a pnpm override cannot reach it), which has carried HIGH
+# CVEs (e.g. CVE-2026-12151). Removing npm eliminates that class at the source —
+# attack-surface reduction, not a Trivy waiver.
+RUN apk --no-cache upgrade && rm -rf /var/cache/apk/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+              /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 # hadolint ignore=DL3021
 COPY --from=build --chown=node:node /workspace/app/<%= name %> /app
 USER node
