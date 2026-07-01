@@ -29,7 +29,19 @@ WORKDIR /app
 # publishes the fixed 3.5.7-r0. Run as root before dropping to `node`. This
 # is a real upgrade (the CVE is gone from the image), not a Trivy waiver, and
 # becomes a near no-op once the upstream digest rebases onto patched alpine.
-RUN apk --no-cache upgrade && rm -rf /var/cache/apk/*
+#
+# Also strip the globally-installed npm + corepack. The runtime invokes tsx
+# directly via node (see CMD) and never shells out to a package manager, so
+# both are dead weight — and npm bundles its own `undici` at
+# /usr/local/lib/node_modules/npm/node_modules/undici (6.25.0 in this base),
+# which carries CVE-2026-12151 (HIGH, unbounded-memory DoS; fixed in 6.27.0).
+# That undici is part of the npm CLI, NOT a project dependency, so a pnpm
+# override cannot reach it — removing npm eliminates the finding at the source
+# (attack-surface reduction, not a Trivy waiver). Re-evaluate once the base
+# image ships an npm whose bundled undici is >= 6.27.0.
+RUN apk --no-cache upgrade && rm -rf /var/cache/apk/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+              /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 # `node:*-alpine` ships with a non-root `node` user (UID 1000). Copy the
 # deploy artifact owned by that user, then drop privileges before CMD.
 COPY --from=build --chown=node:node /deploy ./
