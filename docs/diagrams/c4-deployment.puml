@@ -1,0 +1,53 @@
+@startuml c4-deployment
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/v2.11.0/C4_Deployment.puml
+
+' Modern flat styling: no shadows, sharper corners, clean sans-serif, modern palette.
+skinparam backgroundColor #FAFAFA
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam defaultFontName "Inter, Helvetica, Arial, sans-serif"
+skinparam defaultFontSize 13
+skinparam ArrowColor #37474F
+skinparam ArrowThickness 1.2
+skinparam rectangleBorderThickness 1.3
+
+UpdateElementStyle("person",       $fontColor="#FFFFFF", $bgColor="#0F766E", $borderColor="#134E4A")
+UpdateElementStyle("container",    $fontColor="#FFFFFF", $bgColor="#2563EB", $borderColor="#1E3A8A")
+UpdateElementStyle("container_db", $fontColor="#FFFFFF", $bgColor="#7C3AED", $borderColor="#4C1D95")
+UpdateElementStyle("node",         $bgColor="#F1F5F9", $borderColor="#94A3B8", $fontColor="#1E293B")
+
+title Deployment View — Azure Container Apps
+
+Deployment_Node(rg, "Azure Resource Group", "azurerm_resource_group") {
+  Deployment_Node(vnet, "Virtual Network", "azurerm_virtual_network") {
+    Deployment_Node(aca_env, "ACA Managed Environment", "Container Apps + built-in Dapr placement + scheduler") {
+      Container(nextjs_aca, "web-nextjs", "Next.js 16, Node.js 24, Dapr 1.17.6 sidecar", "External ingress :3000")
+      Container(backend_aca, "backend-ts", "Express 5, Node.js 24, Dapr 1.17.6 sidecar", "External ingress :3001")
+    }
+    Deployment_Node(pe_subnet, "PrivateEndpoints subnet") {
+      ContainerDb(redis_aca, "Azure Cache for Redis", "Standard tier, TLS 1.2", "State + pub/sub")
+    }
+    Deployment_Node(pg_subnet, "Postgres delegated subnet") {
+      ContainerDb(pg_aca, "Postgres Flexible Server", "PostgreSQL 18, private DNS", "Primary datastore")
+    }
+  }
+  Container(kv, "Key Vault", "azurerm_key_vault", "jwt-secret-key, postgres-password, redis-password, app-insights-connection-string")
+  Container(acr, "Container Registry", "azurerm_container_registry", "backend-ts + web-nextjs images, signed via cosign")
+  Container(appins, "Application Insights", "OTLP-compatible APM", "Traces + logs + metrics")
+}
+
+Person(user, "End user", "Browser")
+
+Rel(user, nextjs_aca, "HTTPS", "ACA-managed FQDN + cert")
+Rel(nextjs_aca, backend_aca, "Dapr service invocation", "HTTP via sidecar")
+Rel(backend_aca, pg_aca, "Knex/pg", "TCP/pgwire over private link")
+Rel(backend_aca, redis_aca, "Dapr state + pub/sub", "TCP/TLS")
+Rel(nextjs_aca, kv, "Dapr secretstore via MI", "HTTPS")
+Rel(backend_aca, kv, "Dapr secretstore via MI", "HTTPS")
+Rel(nextjs_aca, acr, "Image pull via MI", "HTTPS")
+Rel(backend_aca, acr, "Image pull via MI", "HTTPS")
+Rel(nextjs_aca, appins, "OTLP", "HTTPS")
+Rel(backend_aca, appins, "OTLP", "HTTPS")
+
+SHOW_LEGEND()
+@enduml

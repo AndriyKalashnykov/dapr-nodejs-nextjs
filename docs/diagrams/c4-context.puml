@@ -1,0 +1,31 @@
+@startuml c4-context
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/v2.11.0/C4_Context.puml
+
+' Modern flat styling: no shadows, sharper corners, clean sans-serif, modern palette.
+skinparam backgroundColor #FAFAFA
+skinparam shadowing false
+skinparam roundCorner 4
+skinparam defaultFontName "Inter, Helvetica, Arial, sans-serif"
+skinparam defaultFontSize 13
+skinparam ArrowColor #37474F
+skinparam ArrowThickness 1.2
+skinparam rectangleBorderThickness 1.3
+
+UpdateElementStyle("person",          $fontColor="#FFFFFF", $bgColor="#0F766E", $borderColor="#134E4A")
+UpdateElementStyle("system",          $fontColor="#FFFFFF", $bgColor="#2563EB", $borderColor="#1E3A8A")
+UpdateElementStyle("external_system", $fontColor="#FFFFFF", $bgColor="#64748B", $borderColor="#475569")
+UpdateBoundaryStyle($bgColor="#F1F5F9", $borderColor="#94A3B8", $fontColor="#1E293B")
+
+title System Context — Dapr Node.js + Next.js
+
+Person(user, "End user", "Browser")
+System(sys, "Dapr Node.js + Next.js stack", "Reference Dapr-on-Node platform: SSR frontend + REST backend + Postgres + Redis (state/pubsub)")
+System_Ext(zipkin, "Zipkin", "Distributed tracing UI (OTel ingest)")
+System_Ext(otel, "Grafana OTEL stack", "Optional logs + metrics + traces (make up-otel)")
+
+Rel(user, sys, "Uses", "HTTPS / HTML / JSON")
+Rel(sys, zipkin, "Spans", "OTLP/HTTP")
+Rel(sys, otel, "Logs + metrics + traces", "OTLP/HTTP")
+
+SHOW_LEGEND()
+@enduml

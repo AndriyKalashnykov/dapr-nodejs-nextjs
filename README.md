@@ -7,21 +7,9 @@
 
 Reference Dapr-on-Node sample wiring a Next.js 16 SSR frontend (App Router, `@vercel/otel`) and an Express 5 / TypeScript backend through Dapr sidecars for state, pub/sub, and service invocation. The **runtime surface** is a JWT-authed REST API plus SSR pages instrumented via OpenTelemetry SDK to Zipkin + a Grafana OTEL collector, with PostgreSQL 18 as primary datastore (Knex) and Redis 8 as the Dapr-managed state/pubsub backend; the **delivery surface** covers a hardened GitHub Actions pipeline (`pnpm audit`, gitleaks, Trivy fs+image scans, hadolint, mermaid-lint, `lint-docker-no-runtime-pnpm`, OWASP ZAP baseline DAST in the `e2e` job) plus cosign keyless OIDC signing in the manual `e2e-aca.yml` deploy workflow, Renovate-managed deps with Dependabot Alerts fast-track, a nightly `main-rot.yml` workflow, a three-layer test pyramid (Vitest unit + integration, compose-driven shell e2e, optional Playwright browser e2e), an `mise`-pinned toolchain (pnpm v11 workspaces), and an Azure Container Apps Terraform deploy (`infra/azure/`).
 
-```mermaid
-C4Context
-    title System Context — Dapr Node.js + Next.js
+<p align="center"><img src="docs/diagrams/out/c4-context.png" alt="C4 System Context — the End user's browser uses the Dapr Node.js + Next.js stack over HTTPS/JSON; the stack exports spans to Zipkin and optional logs/metrics/traces to the Grafana OTEL stack via OTLP/HTTP" width="340"></p>
 
-    Person(user, "End user", "Browser")
-    System(sys, "Dapr Node.js + Next.js stack", "Reference Dapr-on-Node platform: SSR frontend + REST backend + Postgres + Redis (state/pubsub)")
-    System_Ext(zipkin, "Zipkin", "Distributed tracing UI (OTel ingest)")
-    System_Ext(otel, "Grafana OTEL stack", "Optional logs + metrics + traces (`make up-otel`)")
-
-    Rel(user, sys, "Uses", "HTTPS / HTML / JSON")
-    Rel(sys, zipkin, "Spans", "OTLP/HTTP")
-    Rel(sys, otel, "Logs + metrics + traces", "OTLP/HTTP")
-
-    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
-```
+> The C4 **Context**, **Container**, and **Deployment** diagrams are [C4-PlantUML](https://github.com/plantuml-stdlib/C4-PlantUML) sources in [`docs/diagrams/`](docs/diagrams/) (`c4-*.puml`); regenerate the committed PNGs with `make diagrams` (drift-gated by `make diagrams-check`). The sequence diagram below stays inline Mermaid — GitHub renders it directly.
 
 The hero diagram is intentionally Context-level (one box): "what is this and who uses it?". The internal containers (`web-nextjs`, `backend-ts`, Dapr sidecars, Postgres, Redis) are drawn at Container level under [Architecture](#architecture).
 
@@ -111,34 +99,7 @@ Install [Podman Desktop](https://podman-desktop.io/) and enable the "Compose" ex
 
 Each service runs as **two containers**: the app + a Dapr sidecar (`daprd`) in a shared network namespace. All cross-service communication goes through the sidecar — never directly app-to-app.
 
-```mermaid
-C4Container
-    title Container View — Dapr microservices stack
-
-    Person(user, "End user", "Browser")
-
-    System_Boundary(sys, "Dapr microservices") {
-        Container(nextjs, "web-nextjs", "Next.js 16, Node.js 24", "SSR frontend, REST proxy via Dapr invoker")
-        Container(nextjs_dapr, "Dapr sidecar (web-nextjs)", "Dapr 1.17.6", "State + pub/sub + service invocation")
-        Container(backend, "backend-ts", "Express 5, Node.js 24", "REST API with express-zod-api, layered handler/service/model")
-        Container(backend_dapr, "Dapr sidecar (backend-ts)", "Dapr 1.17.6", "State + pub/sub + service invocation")
-        ContainerDb(postgres, "Postgres", "PostgreSQL 18", "Primary datastore (Knex migrations, soft delete)")
-        ContainerDb(redis, "Redis", "Redis 8", "State store + pub/sub broker (todo-data topic)")
-    }
-
-    System_Ext(zipkin, "Zipkin", "Distributed tracing UI (W3C traceparent)")
-
-    Rel(user, nextjs, "HTTPS / HTML", "browser → SSR")
-    Rel(nextjs, nextjs_dapr, "DaprClient.invoker.invoke()", "HTTP")
-    Rel(nextjs_dapr, backend_dapr, "v1.0/invoke/backend-ts/method/...", "HTTP")
-    Rel(backend_dapr, backend, "Routes invoke + consumer", "HTTP")
-    Rel(backend, postgres, "Read/write todos", "TCP/pgwire (knex)")
-    Rel(backend_dapr, redis, "State + pub/sub", "TCP")
-    Rel(nextjs, zipkin, "Spans", "OTLP/HTTP")
-    Rel(backend, zipkin, "Spans", "OTLP/HTTP")
-
-    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
-```
+<img src="docs/diagrams/out/c4-container.png" alt="C4 Container View — the End user reaches web-nextjs (SSR); web-nextjs calls backend-ts strictly through their Dapr sidecars (app → sidecar → sidecar → app); backend-ts reads/writes Postgres and the backend sidecar uses Redis for state + pub/sub; both services export spans to Zipkin" width="1000">
 
 A few facts not visible on the picture:
 
@@ -270,41 +231,7 @@ make e2e-aca   # terraform apply → deploy → smoke → terraform destroy
 
 The matching workflow (`.github/workflows/e2e-aca.yml`) runs on `workflow_dispatch` only (Actions → "E2E (ACA)" → Run workflow). It is not triggered on push/PR because each run incurs Azure cost (low single-digit USD per cycle — see [docs/deploy-aca.md](./docs/deploy-aca.md) for the breakdown) and serializes on Terraform state.
 
-```mermaid
-C4Deployment
-    title Deployment View — Azure Container Apps
-
-    Deployment_Node(rg, "Azure Resource Group", "azurerm_resource_group") {
-        Deployment_Node(vnet, "Virtual Network", "azurerm_virtual_network") {
-            Deployment_Node(aca_env, "ACA Managed Environment", "Container Apps + built-in Dapr placement + scheduler") {
-                Container(nextjs_aca, "web-nextjs", "Next.js 16, Node.js 24, Dapr 1.17.6 sidecar", "External ingress :3000")
-                Container(backend_aca, "backend-ts", "Express 5, Node.js 24, Dapr 1.17.6 sidecar", "External ingress :3001")
-            }
-            Deployment_Node(pe_subnet, "PrivateEndpoints subnet") {
-                ContainerDb(redis_aca, "Azure Cache for Redis", "Standard tier, TLS 1.2", "State + pub/sub")
-            }
-            Deployment_Node(pg_subnet, "Postgres delegated subnet") {
-                ContainerDb(pg_aca, "Postgres Flexible Server", "PostgreSQL 18, private DNS", "Primary datastore")
-            }
-        }
-        Container(kv, "Key Vault", "azurerm_key_vault", "jwt-secret-key, postgres-password, redis-password, app-insights-connection-string")
-        Container(acr, "Container Registry", "azurerm_container_registry", "backend-ts + web-nextjs images, signed via cosign")
-        Container(appins, "Application Insights", "OTLP-compatible APM", "Traces + logs + metrics")
-    }
-
-    Person(user, "End user", "Browser")
-
-    Rel(user, nextjs_aca, "HTTPS", "ACA-managed FQDN + cert")
-    Rel(nextjs_aca, backend_aca, "Dapr service invocation", "HTTP via sidecar")
-    Rel(backend_aca, pg_aca, "Knex/pg", "TCP/pgwire over private link")
-    Rel(backend_aca, redis_aca, "Dapr state + pub/sub", "TCP/TLS")
-    Rel(nextjs_aca, kv, "Dapr secretstore via MI", "HTTPS")
-    Rel(backend_aca, kv, "Dapr secretstore via MI", "HTTPS")
-    Rel(nextjs_aca, acr, "Image pull via MI", "HTTPS")
-    Rel(backend_aca, acr, "Image pull via MI", "HTTPS")
-    Rel(nextjs_aca, appins, "OTLP", "HTTPS")
-    Rel(backend_aca, appins, "OTLP", "HTTPS")
-```
+<img src="docs/diagrams/out/c4-deployment.png" alt="C4 Deployment View — an Azure Resource Group holds a Virtual Network containing the ACA Managed Environment (web-nextjs + backend-ts with Dapr sidecars), a PrivateEndpoints subnet (Azure Cache for Redis), and a Postgres delegated subnet (Postgres Flexible Server), plus Key Vault, Container Registry, and Application Insights; managed identities broker secretstore, image pull, and OTLP" width="900">
 
 - **Ingress**: both container apps have `external_enabled = true` → public HTTPS endpoints auto-issued by ACA
 - **Secrets**: each app has a user-assigned managed identity with `Key Vault Secrets User` role on the KV. Dapr's `azure-keyvault-secretstore` component uses that MI at runtime — no client secrets in app config

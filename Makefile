@@ -40,6 +40,14 @@ CONTAINER_CMD    ?= $(shell command -v podman 2>/dev/null || echo docker)
 # renovate: datasource=docker depName=minlag/mermaid-cli
 MERMAID_CLI_VERSION := 11.15.0
 
+# PlantUML renderer for the C4 architecture diagrams (docs/diagrams/*.puml).
+# Deliberately NOT Renovate-tracked: the committed PNGs are a generated artifact
+# guarded by `make diagrams-check`, and the hosted Renovate app cannot run
+# `make diagrams` to regenerate them — so under this repo's automerge a bump PR
+# would sit permanently RED on the drift gate. Bump manually: edit the tag, run
+# `make diagrams`, commit source + regenerated PNGs together.
+PLANTUML_VERSION := 1.2026.6
+
 # OWASP ZAP baseline scanner — DAST gate. Pinned + Renovate-tracked. Used by
 # `make dast` (local) and the CI `e2e` job. Note: this project deviates from
 # the /harden-image-pipeline canonical pattern (separate `dast` job parallel
@@ -303,7 +311,7 @@ trivy-fs: deps
 	   .
 
 #static-check: @ Composite quality gate: lint + mermaid-lint + vulncheck + secrets + trivy-fs + deps-prune-check
-static-check: lint mermaid-lint vulncheck secrets trivy-fs deps-prune-check
+static-check: lint mermaid-lint diagrams-check vulncheck secrets trivy-fs deps-prune-check
 
 #test: @ Run unit tests across SDK and backend
 test: sdk-compile
@@ -417,6 +425,50 @@ mermaid-lint: deps
 	 rm -f "$$errlog"; \
 	 [ $$status -eq 0 ] && echo "All mermaid blocks valid."; \
 	 exit $$status
+
+# --- Architecture diagrams (PlantUML C4) ---
+DIAGRAM_DIR   := docs/diagrams
+DIAGRAM_SRC   := $(wildcard $(DIAGRAM_DIR)/*.puml)
+DIAGRAM_OUT   := $(patsubst $(DIAGRAM_DIR)/%.puml,$(DIAGRAM_DIR)/out/%.png,$(DIAGRAM_SRC))
+# Version-stamped sentinel: a PLANTUML_VERSION bump changes the stamp's NAME, so
+# the previous stamp no longer satisfies the prereq and every PNG re-renders.
+# Without it, `make diagrams` would no-op on a renderer bump (no .puml changed)
+# and diagrams-check would pass on stale PNGs. Gitignored (a trigger, not an artifact).
+DIAGRAM_STAMP := $(DIAGRAM_DIR)/out/.plantuml-$(PLANTUML_VERSION).stamp
+
+#diagrams: @ Render PlantUML C4 architecture diagrams (docs/diagrams/*.puml) to PNG
+diagrams: $(DIAGRAM_OUT)
+
+$(DIAGRAM_DIR)/out/%.png: $(DIAGRAM_DIR)/%.puml $(DIAGRAM_STAMP)
+	@command -v $(CONTAINER_CMD) >/dev/null 2>&1 || { echo "ERROR: $(CONTAINER_CMD) is not on PATH (needed to pull plantuml/plantuml)"; exit 1; }
+	@mkdir -p $(DIAGRAM_DIR)/out
+	@# Fully-qualified image (docker.io/…) so podman resolves it without
+	@# unqualified-search-registries configured — matches this repo's mermaid-lint.
+	$(CONTAINER_CMD) run --rm -v "$(CURDIR)/$(DIAGRAM_DIR):/work" -w /work \
+		--user $$(id -u):$$(id -g) \
+		-e HOME=/tmp -e _JAVA_OPTIONS=-Duser.home=/tmp \
+		docker.io/plantuml/plantuml:$(PLANTUML_VERSION) \
+		-tpng -o out $(notdir $<)
+
+$(DIAGRAM_STAMP):
+	@mkdir -p $(DIAGRAM_DIR)/out
+	@rm -f $(DIAGRAM_DIR)/out/.plantuml-*.stamp
+	@touch $@
+
+#diagrams-clean: @ Remove rendered diagram artefacts
+diagrams-clean:
+	@rm -rf $(DIAGRAM_DIR)/out
+
+#diagrams-check: @ Verify committed diagrams match current PlantUML source (CI drift gate)
+diagrams-check: diagrams
+	@# `git diff --exit-code` catches MODIFIED tracked PNGs; the porcelain check
+	@# also catches a brand-new .puml whose freshly-rendered PNG is still UNTRACKED
+	@# (a new diagram added without committing its render would otherwise pass green).
+	@if [ -n "$$(git status --porcelain --untracked-files=all -- $(DIAGRAM_DIR)/out)" ]; then \
+		echo "ERROR: Diagram source changed but rendered PNGs not updated/committed. Run 'make diagrams' and commit."; \
+		git status --short --untracked-files=all -- $(DIAGRAM_DIR)/out; \
+		exit 1; \
+	fi
 
 #infra-validate: @ Offline Terraform validation — syntax, types, fmt, tflint (no Azure credentials needed)
 infra-validate: deps
@@ -745,6 +797,7 @@ renovate-validate: deps
         sdk-ci backend-lint backend-test backend-test-integration \
         web-nextjs-ci web-nextjs-test web-nextjs-integration \
         e2e e2e-browser e2e-aca dast infra-validate mermaid-lint \
+        diagrams diagrams-clean diagrams-check \
         tf-init tf-apply-acr tf-acr-login-server tf-apply tf-destroy \
         image-build-prod image-scan-prod image-smoke-test image-push-prod \
         psql migrate redis-cli shell logs \
