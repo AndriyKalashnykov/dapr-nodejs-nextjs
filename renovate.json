@@ -112,13 +112,11 @@
     },
     {
       "description": "Group Makefile inline `# renovate:` tool versions",
-      "matchManagers": ["custom.regex"],
       "matchFileNames": ["Makefile"],
       "groupName": "Makefile tools"
     },
     {
       "description": "Disable digest pinning for Makefile-tracked docker tools (mermaid-cli, etc.). The `docker:pinDigests` preset (inherited from `config:best-practices`) otherwise generates a `pinDigest` update for `MERMAID_CLI_VERSION := 11.14.0`-style entries that have no digest yet. When a `non-major` version bump (11.14.0 → 11.15.0) is ALSO available, both updates target the same `renovate/makefile-tools` branch and collide; Renovate suppresses the version bump and the constant drifts silently. Makefile-tracked deps are dev/lint tools (mermaid-cli, depcheck, npm-check-updates, ZAP, renovate), not production runtime — version pinning is sufficient. Source: 2026-05-13 review — mermaid-cli stuck at 11.14.0 while 11.15.0 was available; debug log showed both `pinDigest` and `non-major` updates in `renovate/makefile-tools` with `Ignoring upgrade collision` suppressing the bump.",
-      "matchManagers": ["custom.regex"],
       "matchFileNames": ["Makefile"],
       "matchDatasources": ["docker"],
       "pinDigests": false
