@@ -1,0 +1,16 @@
+# CI slim-Dapr state store — mirrors app/backend-ts/dapr/components/redis-state.yaml
+# but points at the CI Redis service. `__REDIS_HOST__` is substituted by
+# `make ci-dapr-up` (default localhost:6379 — the integration-test job's Redis
+# service maps 6379 to the runner host, where daprd runs in slim mode).
+# Without this component the `todo.cache.integration.test.ts` read-through
+# cache test skip-guards to green instead of exercising Redis-backed State.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: redis-state
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: __REDIS_HOST__

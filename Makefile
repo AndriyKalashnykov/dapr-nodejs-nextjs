@@ -349,6 +349,14 @@ ci-dapr-up:
 	@sed "s|__HOME__|$$HOME|g" scripts/ci-dapr/local-secretstore.yaml \
 	   > "$$HOME/.dapr/components/local-secretstore.yaml"
 	@cp scripts/ci-dapr/secrets.json "$$HOME/.dapr/secrets.json"
+	@# Redis-backed state + pub/sub components so the cache/pub-sub integration
+	@# tests actually execute (they skip-guard to green without these). Point
+	@# at the CI Redis service (default localhost:6379; daprd runs slim on host).
+	@REDIS_HOST="$${REDIS_HOST:-localhost:6379}"; \
+	 sed "s|__REDIS_HOST__|$$REDIS_HOST|g" scripts/ci-dapr/redis-state.yaml \
+	   > "$$HOME/.dapr/components/redis-state.yaml"; \
+	 sed "s|__REDIS_HOST__|$$REDIS_HOST|g" scripts/ci-dapr/redis-pubsub.yaml \
+	   > "$$HOME/.dapr/components/redis-pubsub.yaml"
 	@DAPR_HOST="$${DAPR_HOST:-localhost}"; DAPR_PORT="$${DAPR_PORT:-3500}"; \
 	 READY_TIMEOUT="$${DAPR_READY_TIMEOUT:-30}"; POLL_INTERVAL="$${DAPR_POLL_INTERVAL:-1}"; \
 	 printf '\n***Starting Dapr sidecar (port %s)***\n\n' "$$DAPR_PORT"; \
