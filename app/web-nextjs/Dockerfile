@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 # Build context is the repo root.
-FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS build
+FROM docker.io/node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS build
 ENV NODE_ENV=production
 RUN corepack enable && corepack prepare pnpm@11.7.0 --activate
 WORKDIR /workspace
@@ -14,7 +14,7 @@ RUN pnpm run build
 # tree at .next/standalone (with hoisted pnpm deps included via
 # outputFileTracingRoot in next.config.ts), plus .next/static and public/.
 # No pnpm/corepack at runtime; entry is `node server.js`.
-FROM docker.io/node:24-alpine@sha256:fb71d01345f11b708a3553c66e7c74074f2d506400ea81973343d915cb64eef0 AS runtime
+FROM docker.io/node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS runtime
 ENV NODE_ENV=production
 # Operator-tunable runtime knobs (externalized per configuration rules).
 # HEALTHCHECK_HOST is 127.0.0.1 (not localhost) to dodge alpine's IPv6-first
