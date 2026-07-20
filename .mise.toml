@@ -32,12 +32,12 @@ node = "24"
 "aqua:hadolint/hadolint" = "2.14.0"
 
 # Terraform — used by infra-validate and e2e-aca targets.
-terraform = "1.15.6"
+terraform = "1.15.8"
 
 # Terraform lint — used by infra-validate. Replaces inline `docker run
 # ghcr.io/terraform-linters/tflint:latest` (banned `:latest` + no Renovate
 # tracking).
-"aqua:terraform-linters/tflint" = "0.63.1"
+"aqua:terraform-linters/tflint" = "0.64.0"
 
 # Secret scanner — wired into `make secrets` (part of `make static-check`).
 "aqua:gitleaks/gitleaks" = "8.30.1"
@@ -48,7 +48,7 @@ terraform = "1.15.6"
 
 # Filesystem CVE / secret / misconfig scanner — wired into `make trivy-fs`
 # (part of `make static-check`). Replaces ad-hoc Docker scans.
-"aqua:aquasecurity/trivy" = "0.71.1"
+"aqua:aquasecurity/trivy" = "0.72.0"
 
 # NOTE: do NOT set NODE_ENV here. Next.js `next build` sets NODE_ENV=production
 # internally; a project-level override leaks into the build and triggers the
