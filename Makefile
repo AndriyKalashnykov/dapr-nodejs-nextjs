@@ -838,7 +838,7 @@ ci-run: deps
 # ── Renovate ────────────────────────────────────────────────────────────────
 
 # renovate: datasource=npm depName=renovate
-RENOVATE_VERSION := 43.269.0
+RENOVATE_VERSION := 43.269.1
 
 #renovate-validate: @ Validate Renovate configuration
 # Uses `npx` (not `pnpm dlx`) because renovate's published `engines.pnpm`
