@@ -38,7 +38,7 @@ CONTAINER_CMD    ?= $(shell command -v podman 2>/dev/null || echo docker)
 # Mermaid CLI is consumed as an OCI image (no native binary). Renovate tracks
 # the digest below; mise has no aqua entry for `minlag/mermaid-cli`.
 # renovate: datasource=docker depName=minlag/mermaid-cli
-MERMAID_CLI_VERSION := 11.15.0
+MERMAID_CLI_VERSION := 11.16.0
 
 # PlantUML renderer for the C4 architecture diagrams (docs/diagrams/*.puml).
 # Deliberately NOT Renovate-tracked: the committed PNGs are a generated artifact
@@ -747,7 +747,7 @@ update: deps
 	@pnpm update
 
 # renovate: datasource=npm depName=npm-check-updates
-NPM_CHECK_UPDATES_VERSION := 22.2.3
+NPM_CHECK_UPDATES_VERSION := 22.2.9
 
 #upgrade: @ Upgrade pnpm dependencies to latest versions (ignoring ranges)
 upgrade: deps
@@ -838,7 +838,7 @@ ci-run: deps
 # ── Renovate ────────────────────────────────────────────────────────────────
 
 # renovate: datasource=npm depName=renovate
-RENOVATE_VERSION := 43.220.0
+RENOVATE_VERSION := 43.269.0
 
 #renovate-validate: @ Validate Renovate configuration
 # Uses `npx` (not `pnpm dlx`) because renovate's published `engines.pnpm`
