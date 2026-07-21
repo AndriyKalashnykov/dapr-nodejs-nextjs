@@ -302,7 +302,14 @@ jobs:
   # ── E2E (full stack via docker compose) ────────────────────────────────────
   e2e:
     needs: [changes, integration-test, web-nextjs]
-    if: ${{ !failure() && !cancelled() && (needs.changes.outputs.code == 'true' || startsWith(github.ref, 'refs/tags/')) }}
+    # Tag-only (release-only), same predicate as cve-check/docker. This job is a
+    # kitchen sink: besides the compose smoke test it also runs
+    # web-nextjs-integration (full Next→Dapr→backend→Postgres chain), the
+    # Playwright browser e2e, and the OWASP ZAP DAST scan — all of which now run
+    # ONLY at release tags (no per-PR/main coverage; main-rot does NOT run them).
+    # ci-pass stays green on PRs because a skipped job is neither failure nor
+    # cancelled (identical to cve-check/docker). Deliberate trade-off; see CLAUDE.md.
+    if: ${{ !failure() && !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
