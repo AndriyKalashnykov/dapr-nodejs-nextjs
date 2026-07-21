@@ -149,6 +149,16 @@
       "matchPackageNames": ["pnpm", "pnpm/pnpm"],
       "matchManagers": ["mise", "npm", "custom.regex"],
       "groupName": "pnpm"
+    },
+    {
+      "description": "Hold typescript on 6.0.x. `@typescript-eslint/typescript-estree` (latest 8.65.0) declares peer `typescript >=4.8.4 <6.1.0`, so any typescript >=6.1 breaks `make lint` (eslint) and reddens build/static-check/web-nextjs — this is what failed Renovate PR #413 (typescript 7.0.2). Verified: tsc/build/tests are NOT the blocker; eslint via typescript-eslint is. Remove or raise this cap once typescript-eslint widens its peer range to include the target typescript; the typescript group below then lands both together. Kept SEPARATE from the group rule so the cap applies ONLY to typescript and does NOT freeze typescript-eslint (which is 8.x). `matchPackageNames` bare strings are exact-match, so this does not catch `typescript-eslint`.",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.1.0"
+    },
+    {
+      "description": "Couple typescript with typescript-eslint so they bump together — typescript-eslint's peer range gates which typescript is installable (see the cap rule above), so a split bump is unmergeable. Appended LAST so it wins over the `dev-dependencies` group (last-match-wins) for these two packages.",
+      "matchPackageNames": ["typescript", "typescript-eslint"],
+      "groupName": "typescript"
     }
   ],
   "customManagers": [
