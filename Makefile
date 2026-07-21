@@ -159,6 +159,13 @@ clean:
 	@rm -rf packages/@sos/sdk/build/
 	@rm -rf app/backend-ts/dist/
 	@rm -rf app/web-nextjs/.next/
+	@# Remove tsc --build incremental state too. The SDK compiles with
+	@# `tsc --build` (composite), which trusts *.tsbuildinfo to decide what to
+	@# rebuild. Deleting build/ WITHOUT deleting the tsbuildinfo leaves tsc
+	@# thinking it is up-to-date, so it emits nothing and build/ never
+	@# regenerates -> backend can't resolve @sos/sdk (TS2307) on the next
+	@# `make compile`. Generic find so new composite packages are covered.
+	@find . -name '*.tsbuildinfo' -not -path '*/node_modules/*' -delete
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
