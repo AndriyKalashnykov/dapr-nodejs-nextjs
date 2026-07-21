@@ -164,6 +164,12 @@
       "description": "Keep tsx as a RANGE — do NOT let `config:best-practices`'s `:pinDevDependencies` (rangeStrategy: pin) re-pin it to an exact version. Root package.json pins tsx as a devDependency; an EXACT pin gets orphaned when a lockfile-only tsx bump dedupes the hoisted tsx to a version != the exact pin, failing `pnpm install --frozen-lockfile` across build/static-check/web-nextjs (this broke PR #404). `replace` keeps the caret range so root always tracks the resolved version and can never be orphaned. Appended last so it overrides the preset's pin (last-match-wins). See also the `/renovate` skill: exact-pin + range-pin of one dep across a monorepo.",
       "matchPackageNames": ["tsx"],
       "rangeStrategy": "replace"
+    },
+    {
+      "description": "Do NOT let Renovate WIDEN the MAJOR-BOUNDED transitive-CVE security overrides in pnpm-workspace.yaml. Their targets are deliberately bounded to the vulnerable version's own major (brace-expansion '>=2.1.2 <3'/'>=5.0.7 <6', body-parser '>=1.20.6 <2'/'>=2.3.0 <3') so a consumer (minimatch@9, @dapr/dapr's express@4) can't jump a major. Renovate reads the upper bound as a stale constraint and opens PRs to WIDEN it (closed #423/#424: brace-expansion->v5, body-parser->v2), which would undo the bound and risk breaking those consumers. These deps are transitive-only (no direct parent for Renovate to bump organically); within-major patches are picked up at install by pnpm, and a future cross-major CVE is surfaced by Dependabot alerts + handled via the manual override fast-track. Unbounded overrides (esbuild/postcss/protobufjs '>=X') don't trip this and are left tracked.",
+      "matchFileNames": ["pnpm-workspace.yaml"],
+      "matchPackageNames": ["brace-expansion", "body-parser"],
+      "enabled": false
     }
   ],
   "customManagers": [
