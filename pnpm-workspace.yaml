@@ -43,7 +43,7 @@ overrides:
   # keep a compatible version.
   # Targets are MAJOR-BOUNDED so a bump can't jump the consumer across a major
   # (e.g. minimatch's brace-expansion 2.x must stay 2.x, not resolve to 5.x).
-  'brace-expansion@>=2.0.0 <2.1.2': '>=2.1.2 <3'
+  'brace-expansion@>=2.0.0 <2.1.2': '>=2.1.2 <6'
   'brace-expansion@>=3.0.0 <5.0.7': '>=5.0.7 <6'
   # body-parser: GHSA-v422-hmwv-36x6 (LOW). 1.20.5 via @dapr/dapr > express@4;
   # 2.2.2 via the app's express@5. Patch each within its own major.
