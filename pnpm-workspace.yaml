@@ -32,4 +32,20 @@ overrides:
   # past 0.28.1 organically (Renovate).
   'esbuild@<0.28.1': '>=0.28.1'
   'postcss@<8.5.10': '>=8.5.10'
-  'protobufjs@<8.0.2': '>=8.0.2'
+  # protobufjs: GHSA-jfj6-75fj-8934 (<=8.6.4) + GHSA-j3f2-48v5-ccww (<=8.6.5),
+  # MEDIUM. In the prod tree via @opentelemetry/*-otlp-grpc exporters. Supersedes
+  # the earlier <8.0.2 override (installed 8.6.3 was still vulnerable); >=8.6.6
+  # clears both new advisories.
+  'protobufjs@<8.6.6': '>=8.6.6'
+  # brace-expansion: GHSA-3jxr-9vmj-r5cp (HIGH, ReDoS). Two vulnerable majors in
+  # the tree — 2.1.1 (prod, via glob > @opentelemetry auto-instrumentation) and
+  # 5.0.6 (devDeps). Patch each within its own major so consumers (glob@10 etc.)
+  # keep a compatible version.
+  # Targets are MAJOR-BOUNDED so a bump can't jump the consumer across a major
+  # (e.g. minimatch's brace-expansion 2.x must stay 2.x, not resolve to 5.x).
+  'brace-expansion@>=2.0.0 <2.1.2': '>=2.1.2 <3'
+  'brace-expansion@>=3.0.0 <5.0.7': '>=5.0.7 <6'
+  # body-parser: GHSA-v422-hmwv-36x6 (LOW). 1.20.5 via @dapr/dapr > express@4;
+  # 2.2.2 via the app's express@5. Patch each within its own major.
+  'body-parser@>=1.0.0 <1.20.6': '>=1.20.6 <2'
+  'body-parser@>=2.0.0 <2.3.0': '>=2.3.0 <3'
