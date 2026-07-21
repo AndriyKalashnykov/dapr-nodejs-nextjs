@@ -159,6 +159,11 @@
       "description": "Couple typescript with typescript-eslint so they bump together — typescript-eslint's peer range gates which typescript is installable (see the cap rule above), so a split bump is unmergeable. Appended LAST so it wins over the `dev-dependencies` group (last-match-wins) for these two packages.",
       "matchPackageNames": ["typescript", "typescript-eslint"],
       "groupName": "typescript"
+    },
+    {
+      "description": "Keep tsx as a RANGE — do NOT let `config:best-practices`'s `:pinDevDependencies` (rangeStrategy: pin) re-pin it to an exact version. Root package.json pins tsx as a devDependency; an EXACT pin gets orphaned when a lockfile-only tsx bump dedupes the hoisted tsx to a version != the exact pin, failing `pnpm install --frozen-lockfile` across build/static-check/web-nextjs (this broke PR #404). `replace` keeps the caret range so root always tracks the resolved version and can never be orphaned. Appended last so it overrides the preset's pin (last-match-wins). See also the `/renovate` skill: exact-pin + range-pin of one dep across a monorepo.",
+      "matchPackageNames": ["tsx"],
+      "rangeStrategy": "replace"
     }
   ],
   "customManagers": [
