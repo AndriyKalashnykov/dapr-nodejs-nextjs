@@ -10,7 +10,7 @@ COPY zscaler_chain_root-int.pem ${CERT_FILE_PATH}
 # Enable pnpm via corepack — single source of truth is root package.json's
 # `packageManager` field, but corepack still needs an explicit prepare to
 # avoid the first-use download prompt at runtime.
-RUN corepack enable && corepack prepare pnpm@11.15.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.15.1 --activate
 
 # Trust corporate CA cert when ADD_CERT=true.
 ARG ADD_CERT
