@@ -37,14 +37,28 @@ overrides:
   # the earlier <8.0.2 override (installed 8.6.3 was still vulnerable); >=8.6.6
   # clears both new advisories.
   'protobufjs@<8.6.6': '>=8.6.6'
-  # brace-expansion: GHSA-3jxr-9vmj-r5cp (HIGH, ReDoS). Two vulnerable majors in
-  # the tree — 2.1.1 (prod, via glob > @opentelemetry auto-instrumentation) and
-  # 5.0.6 (devDeps). Patch each within its own major so consumers (glob@10 etc.)
-  # keep a compatible version.
+  # brace-expansion: GHSA-3jxr-9vmj-r5cp (HIGH, ReDoS) and, since 2026-07,
+  # GHSA-mh99-v99m-4gvg (HIGH, DoS via unbounded expansion; vulnerable <=5.0.7,
+  # patched 5.0.8). Two majors in the tree — 2.x (prod, via minimatch under
+  # glob/@opentelemetry auto-instrumentation) and 5.x (devDeps).
   # Targets are MAJOR-BOUNDED so a bump can't jump the consumer across a major
   # (e.g. minimatch's brace-expansion 2.x must stay 2.x, not resolve to 5.x).
+  #
+  # FLOOR MAINTENANCE (this bit rots — read before editing): a later advisory can
+  # raise the patched floor PAST a pinned target, and the KEY CEILING is the
+  # load-bearing half. When the floor moved 5.0.7 -> 5.0.8, the key `<5.0.7`
+  # stopped MATCHING a dep that had resolved to exactly 5.0.7 (5.0.7 is not
+  # < 5.0.7), so the override silently did not apply at all and the tree kept a
+  # now-vulnerable 5.0.7. Bumping only the target would not have helped. Bump
+  # BOTH the key ceiling and the target together.
+  #
+  # 2.x IS KNOWINGLY UNPATCHED: GHSA-mh99-v99m-4gvg's range (<=5.0.7) covers the
+  # whole 2.x line, and upstream published no 2.x fix (2.1.2 is the last 2.x).
+  # The only patch is 5.0.8, three majors up — forcing minimatch there is exactly
+  # the cross-major jump this bounding exists to prevent. Tracked as an accepted
+  # residual; revisit when minimatch widens its own range or upstream backports.
   'brace-expansion@>=2.0.0 <2.1.2': '>=2.1.2 <3'
-  'brace-expansion@>=3.0.0 <5.0.7': '>=5.0.7 <6'
+  'brace-expansion@>=3.0.0 <5.0.8': '>=5.0.8 <6'
   # body-parser: GHSA-v422-hmwv-36x6 (LOW). 1.20.5 via @dapr/dapr > express@4;
   # 2.2.2 via the app's express@5. Patch each within its own major.
   'body-parser@>=1.0.0 <1.20.6': '>=1.20.6 <2'
