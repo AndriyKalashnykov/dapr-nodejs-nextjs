@@ -63,3 +63,40 @@ overrides:
   # 2.2.2 via the app's express@5. Patch each within its own major.
   'body-parser@>=1.0.0 <1.20.6': '>=1.20.6 <2'
   'body-parser@>=2.0.0 <2.3.0': '>=2.3.0 <3'
+
+# Advisories deliberately waived because NO FIX IS REACHABLE in this tree. An
+# override cannot help either one, so without these waivers `make vulncheck`
+# (and the daily `main-rot.yml` run) is permanently red and a genuinely NEW CVE
+# becomes indistinguishable from these two.
+#
+# SCOPE: this suppresses ONLY the two IDs listed. Any other advisory — including
+# a new one in these same packages — still fails the gate. Verified by removing
+# one ID and confirming vulncheck goes red on it.
+#
+# NO ENFORCED EXPIRY: pnpm has no `exp:`-style field (unlike .trivyignore), so
+# the removal conditions below are discipline, not a mechanism. They are also
+# tracked in CLAUDE.md "## Upgrade Backlog" so they get re-checked.
+#
+#   GHSA-mh99-v99m-4gvg  brace-expansion <=5.0.7 (HIGH, DoS)
+#     Remaining exposure: 2.1.2, via minimatch under glob under
+#     @opentelemetry/auto-instrumentations-node (prod tree).
+#     Why unreachable: the advisory range covers ALL of 2.x and upstream shipped
+#     no 2.x patch (2.1.2 is the last 2.x). The only fix is 5.0.8 — three majors
+#     up — which is exactly the cross-major jump the bounded overrides above
+#     exist to prevent.
+#     REMOVE WHEN: minimatch widens its brace-expansion range to 5.x (then the
+#     5.x override covers it), or upstream backports a 2.x fix.
+#
+#   GHSA-f88m-g3jw-g9cj  sharp <0.35.0 (HIGH, inherited libvips CVEs)
+#     Remaining exposure: 0.34.5, an OPTIONAL dependency of next@16.2.11 used
+#     only by the Next.js image optimizer.
+#     Why unreachable: next@16.2.11 is the latest next and declares
+#     `optionalDependencies.sharp: ^0.34.5` (i.e. <0.35.0). Overriding to
+#     >=0.35.0 would push sharp outside next's own declared range rather than
+#     fixing anything — the documented override-crosses-the-dependent's-range trap.
+#     REMOVE WHEN: a next release widens to ^0.35.0 (then drop this and let the
+#     Next.js group bump carry it).
+auditConfig:
+  ignoreGhsas:
+    - GHSA-mh99-v99m-4gvg
+    - GHSA-f88m-g3jw-g9cj
