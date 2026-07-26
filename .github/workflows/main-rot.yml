@@ -64,4 +64,6 @@ jobs:
       # of decay this workflow exists to detect. With `-k` both goals run and
       # make still exits non-zero if either failed.
       - name: Static check + CVE scan
-        run: make -k static-check cve-check
+        run: |
+          make -k static-check cve-check \
+            || { echo "ERROR: main-rot failed — BOTH goals ran under -k; read EVERY failure above, not just the last."; exit 1; }

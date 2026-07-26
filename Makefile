@@ -346,8 +346,16 @@ check-toolchain-alignment:
 # tag-gated), so this OFFLINE structural check is the only thing that can catch
 # a half-applied waiver before merge.
 #
-# WHAT THIS PROVES: a counterpart `- id:` entry exists in .trivyignore.yaml for
-#   every pnpm waiver that trivy can report.
+# WHAT THIS PROVES: a counterpart `- id:` entry exists **under the
+#   `vulnerabilities:` key** of .trivyignore.yaml for every pnpm waiver that
+#   trivy can report, that the parser saw EVERY list entry (`n` is reconciled
+#   against an independent `grep -c` so a renamed/re-indented key cannot yield
+#   a vacuous "checked 0"), and that each purl pin still resolves in
+#   pnpm-lock.yaml (a version bump inside the dependent's range — Renovate's
+#   lockFileMaintenance automerges those — silently makes the waiver INERT).
+#   The section scoping is load-bearing: `- id:` also appears under
+#   `misconfigurations:`, and an entry pasted into the wrong section satisfied
+#   an unscoped grep while trivy still exited 1.
 # WHAT IT DOES NOT PROVE: that the id is the RIGHT alias, or that it suppresses
 #   anything. A typo'd CVE id passes this gate and still reddens `make
 #   trivy-fs`. Alias correctness is verified ONLY by running trivy — that is
@@ -364,34 +372,46 @@ check-cve-waiver-parity:
 	@ws=pnpm-workspace.yaml; ti=.trivyignore.yaml; \
 	 { [ -f "$$ws" ] && [ -f "$$ti" ]; } || { echo "ERROR: $$ws or $$ti is missing"; exit 1; }; \
 	 ids=$$(awk '\
-	   /^auditConfig:[[:space:]]*$$/ { in_ac=1; next } \
-	   /^[^[:space:]#]/              { in_ac=0; in_l=0 } \
-	   in_ac && /^[[:space:]]+ignoreGhsas:[[:space:]]*$$/ { in_l=1; next } \
+	   /^auditConfig:[[:space:]]*(#.*)?$$/ { in_ac=1; next } \
+	   /^[^[:space:]#]/                    { in_ac=0; in_l=0 } \
+	   in_ac && /^[[:space:]]+ignoreGhsas:[[:space:]]*(#.*)?$$/ { in_l=1; next } \
 	   in_l && /^[[:space:]]*-/ { \
 	       line=$$0; sub(/^[[:space:]]*-[[:space:]]*/,"",line); \
-	       id=line; sub(/[[:space:]].*$$/,"",id); \
-	       alias="MISSING"; \
+	       id=line; sub(/[[:space:]].*$$/,"",id); gsub(/["'"'"']/,"",id); \
+	       alias="MISSING"; reason=""; \
 	       if (match(line, /#[[:space:]]*trivy-alias:[[:space:]]*[^[:space:]]+/)) { \
-	         alias=substr(line, RSTART, RLENGTH); sub(/.*trivy-alias:[[:space:]]*/,"",alias) } \
-	       printf "%s\037%s\n", id, alias; next } \
+	         alias=substr(line, RSTART, RLENGTH); sub(/.*trivy-alias:[[:space:]]*/,"",alias); \
+	         reason=substr(line, RSTART+RLENGTH); sub(/^[[:space:]]+/,"",reason) } \
+	       printf "%s\037%s\037%s\n", id, alias, reason; next } \
 	   in_l && /^[[:space:]]*(#|$$)/ { next } \
 	   in_l { in_l=0 }' "$$ws"); \
 	 inline=$$(grep -cE '^[[:space:]]+ignoreGhsas:[[:space:]]*[^[:space:]#]' "$$ws" || true); \
-	 anchors=$$(grep -oE '^[[:space:]]*-[[:space:]]*id:[[:space:]]*[A-Za-z]+-[0-9A-Za-z-]+' "$$ti" \
-	            | sed -E 's/.*id:[[:space:]]*//' || true); \
-	 n=0; skipped=0; missing=""; nomarker=""; malformed=""; \
-	 while IFS=$$'\037' read -r id alias; do \
+	 raw=$$(grep -cE '^[[:space:]]*-[[:space:]]*"?'"'"'?GHSA-' "$$ws" || true); \
+	 anchors=$$(awk '\
+	   /^vulnerabilities:[[:space:]]*(#.*)?$$/ { in_v=1; next } \
+	   /^[^[:space:]#]/                        { in_v=0 } \
+	   in_v && /^[[:space:]]*-[[:space:]]*id:[[:space:]]*[A-Za-z]+-[0-9A-Za-z-]+/ { \
+	       sub(/^[[:space:]]*-[[:space:]]*id:[[:space:]]*/,""); sub(/[[:space:]].*$$/,""); print }' "$$ti"); \
+	 n=0; skipped=0; missing=""; nomarker=""; malformed=""; noreason=""; \
+	 while IFS=$$'\037' read -r id alias reason; do \
 	   [ -n "$$id" ] || continue; \
 	   n=$$((n+1)); \
 	   case "$$id" in GHSA-*) ;; *) malformed="$$malformed $$id"; continue ;; esac; \
 	   case "$$alias" in \
 	     MISSING) nomarker="$$nomarker $$id"; continue ;; \
-	     none)    skipped=$$((skipped+1)); continue ;; \
+	     none)    if [ -z "$$reason" ]; then noreason="$$noreason $$id"; \
+	              else skipped=$$((skipped+1)); fi; continue ;; \
 	     self)    want="$$id" ;; \
 	     *)       want="$$alias" ;; \
 	   esac; \
-	   grep -qxF "$$want" <<< "$$anchors" || missing="$$missing $$id(needs '- id: $$want')"; \
+	   grep -qxF "$$want" <<< "$$anchors" || missing="$$missing $$id(needs '- id: $$want' under vulnerabilities:)"; \
 	 done <<< "$$ids"; \
+	 if [ "$$n" -ne "$$raw" ]; then \
+	   echo "ERROR: parsed $$n of $$raw '- GHSA-…' list entries in $$ws."; \
+	   echo "       The ignoreGhsas parser did not see them all — a key was renamed,"; \
+	   echo "       re-indented, or the list moved. FIX THE PARSER; do NOT loosen it."; \
+	   exit 1; \
+	 fi; \
 	 if [ "$$n" -eq 0 ] && [ "$$inline" != "0" ]; then \
 	   echo "ERROR: $$ws has an ignoreGhsas: key with an INLINE value, and this gate"; \
 	   echo "       parsed ZERO entries — it only understands block style:"; \
@@ -412,13 +432,33 @@ check-cve-waiver-parity:
 	   echo  '       cannot report it (state which admission rule excludes it).'; \
 	   exit 1; \
 	 fi; \
+	 if [ -n "$$noreason" ]; then \
+	   printf 'ERROR: "# trivy-alias: none" with no reason after it:%s\n' "$$noreason"; \
+	   echo  '       State WHICH trivy admission rule excludes it, e.g.'; \
+	   echo  '         - GHSA-… # trivy-alias: none (MODERATE; trivy-fs scans CRITICAL,HIGH)'; \
+	   exit 1; \
+	 fi; \
 	 if [ -n "$$missing" ]; then \
 	   printf 'ERROR: pnpm waiver(s) with no counterpart in %s:%s\n' "$$ti" "$$missing"; \
 	   echo  '       `pnpm audit` would pass and `trivy fs` would still fail. Add the'; \
 	   echo  "       entry to $$ti (trivy resolves no GHSA->CVE aliases)."; \
 	   exit 1; \
 	 fi; \
-	 printf 'cve-waiver parity: checked %s waiver(s), %s declared trivy-alias:none\n' "$$n" "$$skipped"
+	 stale=""; \
+	 while IFS= read -r purl; do \
+	   [ -n "$$purl" ] || continue; \
+	   pkg=$${purl#pkg:npm/}; \
+	   case "$$pkg" in *@*) ;; *) continue ;; esac; \
+	   grep -qF "$$pkg" pnpm-lock.yaml || stale="$$stale $$purl"; \
+	 done <<< "$$(grep -oE 'pkg:npm/[^\"]+@[0-9][^\"]*' "$$ti" || true)"; \
+	 if [ -n "$$stale" ]; then \
+	   printf 'ERROR: %s pins a purl that pnpm-lock.yaml no longer resolves:%s\n' "$$ti" "$$stale"; \
+	   echo  '       The waiver is INERT — trivy would report the advisory against the'; \
+	   echo  '       new version and only surface it at a tag or the next main-rot.'; \
+	   echo  '       Re-check whether a fix is now reachable; if not, repin the purl.'; \
+	   exit 1; \
+	 fi; \
+	 printf 'cve-waiver parity: checked %s waiver(s), %s declared trivy-alias:none; purl pins resolve in pnpm-lock.yaml\n' "$$n" "$$skipped"
 
 #static-check: @ Composite quality gate (PR path, no CVE scans): check-toolchain-alignment + check-cve-waiver-parity + lint + mermaid-lint + diagrams-check + secrets + deps-prune-check
 static-check: check-toolchain-alignment check-cve-waiver-parity lint mermaid-lint diagrams-check secrets deps-prune-check
