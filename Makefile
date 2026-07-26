@@ -337,11 +337,102 @@ check-toolchain-alignment:
 	 if [ "$$fail" -ne 0 ]; then echo "ERROR: toolchain version drift — align the files above so all agree"; exit 1; fi; \
 	 printf 'toolchain aligned: node major %s, pnpm %s\n' "$$mise_node" "$$mise_pnpm"
 
-#static-check: @ Composite quality gate (PR path, no CVE scans): check-toolchain-alignment + lint + mermaid-lint + diagrams-check + secrets + deps-prune-check
-static-check: check-toolchain-alignment lint mermaid-lint diagrams-check secrets deps-prune-check
+#check-cve-waiver-parity: @ Fail if a `pnpm audit` waiver has no counterpart in .trivyignore.yaml
+# A CVE waiver has TWO homes — `pnpm-workspace.yaml` (`auditConfig.ignoreGhsas`,
+# read by `pnpm audit`) and `.trivyignore.yaml` (read by every `trivy` surface).
+# Waiving in one and not the other is how main-rot went red on 2026-07-26: PR
+# #447 added two ids to the pnpm side only, and `trivy fs` kept failing on the
+# same two advisories. Neither scanner runs on the PR path (CVE scanning is
+# tag-gated), so this OFFLINE structural check is the only thing that can catch
+# a half-applied waiver before merge.
+#
+# WHAT THIS PROVES: a counterpart `- id:` entry exists in .trivyignore.yaml for
+#   every pnpm waiver that trivy can report.
+# WHAT IT DOES NOT PROVE: that the id is the RIGHT alias, or that it suppresses
+#   anything. A typo'd CVE id passes this gate and still reddens `make
+#   trivy-fs`. Alias correctness is verified ONLY by running trivy — that is
+#   what `cve-check` (tag pushes + daily main-rot) is for. This gate catches a
+#   MISSING half, not a WRONG half.
+# COVERAGE IS 2 OF 3 POLICY FILES: `renovate.json` also carries per-package
+#   policy (e.g. brace-expansion is pinned out of Renovate's reach there). This
+#   gate does not look at it.
+#
+# Do NOT widen the search beyond the two named files. Widening it to CLAUDE.md
+# or the Makefile would make the gate match its OWN source (both contain these
+# ids verbatim) and go vacuously green — the self-scan trap.
+check-cve-waiver-parity:
+	@ws=pnpm-workspace.yaml; ti=.trivyignore.yaml; \
+	 { [ -f "$$ws" ] && [ -f "$$ti" ]; } || { echo "ERROR: $$ws or $$ti is missing"; exit 1; }; \
+	 ids=$$(awk '\
+	   /^auditConfig:[[:space:]]*$$/ { in_ac=1; next } \
+	   /^[^[:space:]#]/              { in_ac=0; in_l=0 } \
+	   in_ac && /^[[:space:]]+ignoreGhsas:[[:space:]]*$$/ { in_l=1; next } \
+	   in_l && /^[[:space:]]*-/ { \
+	       line=$$0; sub(/^[[:space:]]*-[[:space:]]*/,"",line); \
+	       id=line; sub(/[[:space:]].*$$/,"",id); \
+	       alias="MISSING"; \
+	       if (match(line, /#[[:space:]]*trivy-alias:[[:space:]]*[^[:space:]]+/)) { \
+	         alias=substr(line, RSTART, RLENGTH); sub(/.*trivy-alias:[[:space:]]*/,"",alias) } \
+	       printf "%s\037%s\n", id, alias; next } \
+	   in_l && /^[[:space:]]*(#|$$)/ { next } \
+	   in_l { in_l=0 }' "$$ws"); \
+	 inline=$$(grep -cE '^[[:space:]]+ignoreGhsas:[[:space:]]*[^[:space:]#]' "$$ws" || true); \
+	 anchors=$$(grep -oE '^[[:space:]]*-[[:space:]]*id:[[:space:]]*[A-Za-z]+-[0-9A-Za-z-]+' "$$ti" \
+	            | sed -E 's/.*id:[[:space:]]*//' || true); \
+	 n=0; skipped=0; missing=""; nomarker=""; malformed=""; \
+	 while IFS=$$'\037' read -r id alias; do \
+	   [ -n "$$id" ] || continue; \
+	   n=$$((n+1)); \
+	   case "$$id" in GHSA-*) ;; *) malformed="$$malformed $$id"; continue ;; esac; \
+	   case "$$alias" in \
+	     MISSING) nomarker="$$nomarker $$id"; continue ;; \
+	     none)    skipped=$$((skipped+1)); continue ;; \
+	     self)    want="$$id" ;; \
+	     *)       want="$$alias" ;; \
+	   esac; \
+	   grep -qxF "$$want" <<< "$$anchors" || missing="$$missing $$id(needs '- id: $$want')"; \
+	 done <<< "$$ids"; \
+	 if [ "$$n" -eq 0 ] && [ "$$inline" != "0" ]; then \
+	   echo "ERROR: $$ws has an ignoreGhsas: key with an INLINE value, and this gate"; \
+	   echo "       parsed ZERO entries — it only understands block style:"; \
+	   echo "         ignoreGhsas:"; \
+	   echo "           - GHSA-xxxx-yyyy-zzzz # trivy-alias: CVE-2026-12345"; \
+	   echo "       FIX THE PARSER or restore block style — do NOT loosen this check."; \
+	   exit 1; \
+	 fi; \
+	 if [ -n "$$malformed" ]; then \
+	   printf 'ERROR: unrecognised ignoreGhsas entr(ies) — expected GHSA-…:%s\n' "$$malformed"; \
+	   exit 1; \
+	 fi; \
+	 if [ -n "$$nomarker" ]; then \
+	   printf 'ERROR: pnpm waiver(s) with no "# trivy-alias:" marker:%s\n' "$$nomarker"; \
+	   echo  '       Append one to the list item in '"$$ws"', e.g.'; \
+	   echo  '         - GHSA-xxxx-yyyy-zzzz # trivy-alias: CVE-2026-12345'; \
+	   echo  '       Use "self" when the advisory has no CVE id, or "none" when trivy'; \
+	   echo  '       cannot report it (state which admission rule excludes it).'; \
+	   exit 1; \
+	 fi; \
+	 if [ -n "$$missing" ]; then \
+	   printf 'ERROR: pnpm waiver(s) with no counterpart in %s:%s\n' "$$ti" "$$missing"; \
+	   echo  '       `pnpm audit` would pass and `trivy fs` would still fail. Add the'; \
+	   echo  "       entry to $$ti (trivy resolves no GHSA->CVE aliases)."; \
+	   exit 1; \
+	 fi; \
+	 printf 'cve-waiver parity: checked %s waiver(s), %s declared trivy-alias:none\n' "$$n" "$$skipped"
+
+#static-check: @ Composite quality gate (PR path, no CVE scans): check-toolchain-alignment + check-cve-waiver-parity + lint + mermaid-lint + diagrams-check + secrets + deps-prune-check
+static-check: check-toolchain-alignment check-cve-waiver-parity lint mermaid-lint diagrams-check secrets deps-prune-check
 
 #cve-check: @ CVE scans (pnpm audit + Trivy filesystem) — runs on TAG pushes in CI + daily on main via main-rot; not on every PR
-cve-check: vulncheck trivy-fs
+# `-k` (keep-going) is load-bearing: as plain prerequisites, a `vulncheck`
+# failure STOPPED make before `trivy-fs` ever ran, and that masking hid a real
+# trivy breakage for five consecutive daily main-rot runs. Both scanners must
+# report every time. A single sub-make (rather than two) keeps `deps`/`install`
+# from running twice. Caveat: `-k` also continues past a failure in a shared
+# prerequisite, so a broken `deps` surfaces as two errors instead of one.
+cve-check:
+	@$(MAKE) --no-print-directory -k vulncheck trivy-fs \
+	  || { echo "ERROR: cve-check failed — BOTH scanners ran; read EVERY failure above, not just the first."; exit 1; }
 
 #test: @ Run unit tests across SDK and backend
 test: sdk-compile
@@ -864,7 +955,7 @@ renovate-validate: deps
         up run up-db up-dapr up-otel up-infra down down-otel \
         debug terminal format format-check \
         lint lint-scripts-exec lint-docker-no-runtime-pnpm vulncheck secrets trivy-fs \
-        check-toolchain-alignment static-check cve-check \
+        check-toolchain-alignment check-cve-waiver-parity static-check cve-check \
         test integration-test test-integration \
         ci-dapr-up ci-db-prepare \
         sdk-ci backend-lint backend-test backend-test-integration \

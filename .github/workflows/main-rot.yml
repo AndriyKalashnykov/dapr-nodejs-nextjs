@@ -58,5 +58,10 @@ jobs:
       # cve-check is NOT part of the PR/push static-check (CVE scanning is
       # tag-gated); main-rot runs it daily so vuln-advisory decay on `main`
       # (a new CVE against an unchanged dep) still surfaces within 24h.
+      # `-k` (keep-going) is load-bearing: make processes goals in order and
+      # STOPS at the first failure, so a red `static-check` would blank the CVE
+      # arm of the only non-tag run that performs it — masking exactly the class
+      # of decay this workflow exists to detect. With `-k` both goals run and
+      # make still exits non-zero if either failed.
       - name: Static check + CVE scan
-        run: make static-check cve-check
+        run: make -k static-check cve-check

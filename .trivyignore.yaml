@@ -1,7 +1,24 @@
 # trivy ignore config — see https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
 #
-# Path-scoped suppressions only: a finding must remain blocked everywhere
-# else, so the gate keeps catching new Dockerfile regressions.
+# Suppressions are SCOPED as tightly as the finding allows, so the gate keeps
+# catching everything else:
+#   - misconfigurations: scoped by `paths:` (dev/build-only Dockerfiles).
+#   - vulnerabilities:   scoped by `purls:` pinned to the exact vulnerable
+#     version, so the same CVE against ANY other version still fails.
+# NOT every entry can be scoped — `CVE-2026-33671` below is global because it
+# comes from the base image rather than a path we own.
+#
+# `vulnerabilities:` entries that mirror a `pnpm audit` waiver are kept in sync
+# with `pnpm-workspace.yaml`'s `auditConfig.ignoreGhsas` by
+# `make check-cve-waiver-parity` (wired into `static-check`). Trivy does NOT
+# resolve GHSA->CVE aliases (measured, trivy 0.72.0: an ignorefile entry naming
+# GHSA-mh99-v99m-4gvg leaves CVE-2026-14257 reported), so the two files
+# deliberately name the SAME advisory by DIFFERENT ids. Each pnpm waiver
+# declares the id trivy needs via a `# trivy-alias:` marker; the gate reads it.
+#
+# Do NOT add a plain-text `.trivyignore` alongside this file: the pinned
+# `aquasecurity/trivy-action` hard-fails with "Cannot mix YAML and plain trivy
+# ignore files", and it supports only ONE YAML ignore file.
 
 misconfigurations:
   # DS-0002: "Image user should not be 'root'"
@@ -38,3 +55,45 @@ vulnerabilities:
   #   so the vulnerable picomatch path is unreachable. Drop this entry
   #   when the upstream `node:*-alpine` ships an npm with picomatch >= 4.0.4.
   - id: CVE-2026-33671
+
+  # CVE-2026-14257 (== GHSA-mh99-v99m-4gvg): brace-expansion DoS via unbounded
+  #   expansion. Mirrors the `pnpm audit` waiver in pnpm-workspace.yaml, which
+  #   names the SAME advisory by its GHSA id — trivy resolves no GHSA aliases,
+  #   so the id here MUST be the CVE. `make check-cve-waiver-parity` enforces
+  #   that the two files keep a counterpart for each other.
+  #   Exposure: 2.1.2 via minimatch@9 > glob@10 > rimraf@5 > gaxios >
+  #   gcp-metadata > @opentelemetry/resource-detector-gcp >
+  #   auto-instrumentations-node (prod tree).
+  #   Why no override helps: the advisory range (<=5.0.7) covers ALL of 2.x and
+  #   upstream shipped no 2.x patch (2.1.2 is the last). The only fix is 5.0.8,
+  #   three majors up — the cross-major jump the bounded overrides prevent.
+  #   The `purls` pin is load-bearing: the 5.x line is already overridden to
+  #   >=5.0.8, and an unscoped `id:` would silently suppress a 5.x REGRESSION
+  #   below that floor too. Any version other than 2.1.2 still fails the gate.
+  #   No `expired_at:` — deliberate, mirroring the pnpm side, which has no
+  #   expiry field at all; re-evaluation is tracked in CLAUDE.md's Upgrade
+  #   Backlog. If you add one here, teach check-cve-waiver-parity to reject a
+  #   lapsed date, or the parity gate stays green over an inert waiver.
+  #   REMOVE WHEN: minimatch widens its brace-expansion range to 5.x (the
+  #   existing 5.x override then covers it), or upstream backports a 2.x fix.
+  - id: CVE-2026-14257
+    purls:
+      - "pkg:npm/brace-expansion@2.1.2"
+
+  # GHSA-f88m-g3jw-g9cj: sharp inherits libvips CVE-2026-33327 / -33328 /
+  #   -35590 / -35591. This advisory has NO CVE id, so both files name it
+  #   identically (the pnpm waiver's marker records that as `self`).
+  #   Exposure: 0.34.5, an OPTIONAL dependency of next, used only by the
+  #   Next.js image optimizer. Unlike brace-expansion it is also SHIPPED in the
+  #   web-nextjs runtime image, so this entry is what keeps the tag-time
+  #   `docker` job's `trivy image` scan green too (measured 2026-07-26: without
+  #   it that scan reports Total: 1 HIGH on sharp; with it, 0).
+  #   Why no override helps: next (latest, 16.2.12 as of 2026-07-26) declares
+  #   `optionalDependencies.sharp: ^0.34.5`, i.e. <0.35.0. The fix is 0.35.0 —
+  #   an override would push sharp outside next's own declared range rather
+  #   than fixing anything.
+  #   REMOVE WHEN: a next release widens to ^0.35.0 — then drop this and let
+  #   the existing Renovate `Next.js` group carry the bump.
+  - id: GHSA-f88m-g3jw-g9cj
+    purls:
+      - "pkg:npm/sharp@0.34.5"
