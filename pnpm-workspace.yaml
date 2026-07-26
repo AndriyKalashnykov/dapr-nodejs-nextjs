@@ -69,6 +69,30 @@ overrides:
 # (and the daily `main-rot.yml` run) is permanently red and a genuinely NEW CVE
 # becomes indistinguishable from these two.
 #
+# A WAIVER HAS TWO HOMES — this file covers `pnpm audit` ONLY. `make cve-check`
+# also runs `trivy fs`, which reads `.trivyignore.yaml` and knows nothing about
+# `auditConfig`. Waiving here and not there is exactly how main-rot went red on
+# 2026-07-26: PR #447 added these two ids, RED-proved them against `vulncheck`
+# alone, and trivy kept failing on the same two advisories.
+#
+# THE TWO FILES NAME THE SAME ADVISORY BY DIFFERENT IDS. Trivy does not resolve
+# GHSA->CVE aliases (measured, trivy 0.72.0: an ignorefile entry naming
+# GHSA-mh99-v99m-4gvg leaves CVE-2026-14257 reported), so each id below carries
+# a `# trivy-alias:` marker naming the id `.trivyignore.yaml` must use:
+#   `# trivy-alias: CVE-…`  -> that CVE must appear as an `- id:` there
+#   `# trivy-alias: self`   -> the GHSA id itself must appear there
+#   `# trivy-alias: none`   -> trivy cannot report it at all, so it needs no
+#                              entry. Only legitimate when trivy's admission
+#                              criteria exclude it — `trivy fs` scans
+#                              CRITICAL,HIGH with --ignore-unfixed, while
+#                              `pnpm audit` runs at --audit-level=moderate, so
+#                              a MODERATE/LOW advisory, or one with no fixed
+#                              version, is invisible to trivy. State WHICH
+#                              reason inline; `none` is not a way to skip work.
+# `make check-cve-waiver-parity` (in `static-check`, so it runs on the PR path
+# where the scanners themselves deliberately do not) enforces this. A missing
+# marker fails the gate.
+#
 # SCOPE: this suppresses ONLY the two IDs listed. Any other advisory — including
 # a new one in these same packages — still fails the gate. Verified by removing
 # one ID and confirming vulncheck goes red on it.
@@ -98,5 +122,5 @@ overrides:
 #     Next.js group bump carry it).
 auditConfig:
   ignoreGhsas:
-    - GHSA-mh99-v99m-4gvg
-    - GHSA-f88m-g3jw-g9cj
+    - GHSA-mh99-v99m-4gvg # trivy-alias: CVE-2026-14257
+    - GHSA-f88m-g3jw-g9cj # trivy-alias: self

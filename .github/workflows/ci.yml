@@ -106,7 +106,7 @@ jobs:
           path: packages/@sos/sdk/build
           retention-days: 1
 
-  # ── Static check (lint + vulncheck + secrets + trivy-fs + mermaid-lint) ────
+  # ── Static check (PR gate; CVE scans are tag-gated, see the cve-check job) ─
   # Runs in parallel with `build` — `make static-check` invokes the lint
   # target which has `sdk-compile` as a prerequisite, so this job compiles
   # the SDK itself rather than downloading the `build` job's artifact.
