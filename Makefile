@@ -885,7 +885,7 @@ update: deps
 	@pnpm update
 
 # renovate: datasource=npm depName=npm-check-updates
-NPM_CHECK_UPDATES_VERSION := 22.2.9
+NPM_CHECK_UPDATES_VERSION := 23.0.0
 
 #upgrade: @ Upgrade pnpm dependencies to latest versions (ignoring ranges)
 upgrade: deps
